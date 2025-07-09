@@ -1,0 +1,24 @@
+[package]
+name = "amf-rs"
+version = "0.1.0"
+edition = "2024"
+description = "🦀 Rust implementation of Action Message Format (AMF) protocol."
+authors = ["ubizhang@hotmail.com"]
+license = "GPL-3.0-or-later"
+repository = "https://github.com/F2077/amf-rs"
+
+[dependencies]
+bitio-rs = "0.1.2"
+
+[dev-dependencies]
+criterion = "0.4"
+itertools = "0.10.5"
+
+[features]
+default = []
+bench = []  # 显式声明 bench 特性
+
+[[bench]]
+name = "read"
+harness = false
+
