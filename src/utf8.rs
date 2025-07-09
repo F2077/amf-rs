@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::io;
-use std::io::{BufWriter, Write};
+use std::io::{BufReader, BufWriter, Read, Write};
 
 pub struct Utf8<'a> {
     length: u16,
@@ -141,5 +141,17 @@ impl<W: Write> Utf8Writer<W> {
     pub fn write(&mut self, value: &str) -> std::io::Result<()> {
         self.inner.write_all(value.len().to_be_bytes().as_slice())?;
         self.inner.write_all(value.as_bytes())
+    }
+}
+
+pub struct Utf8Reader<R: Read> {
+    inner: BufReader<R>,
+}
+
+impl<R: Read> Utf8Reader<R> {
+    pub fn new(inner: R) -> Utf8Reader<R> {
+        Utf8Reader {
+            inner: BufReader::new(inner),
+        }
     }
 }
