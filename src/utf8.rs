@@ -11,67 +11,45 @@ pub trait Length: Copy + Sized {
     fn read_be_bytes(buf: &[u8]) -> io::Result<Self>;
 }
 
-impl Length for u16 {
-    const WIDTH: usize = 2;
-    const MAX: usize = u16::MAX as usize; // 65535
+macro_rules! impl_length_for {
+    ($type:ty) => {
+        impl Length for $type {
+            const WIDTH: usize = std::mem::size_of::<$type>();
+            const MAX: usize = <$type>::MAX as usize;
 
-    fn write_be_bytes(self, buf: &mut [u8]) -> io::Result<()> {
-        if buf.len() < Self::WIDTH {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "buffer too small: need {} bytes, got {}",
-                    Self::WIDTH,
-                    buf.len()
-                ),
-            ));
-        }
-        let bytes = self.to_be_bytes();
-        buf[0..Self::WIDTH].copy_from_slice(&bytes);
-        Ok(())
-    }
+            fn write_be_bytes(self, buf: &mut [u8]) -> io::Result<()> {
+                if buf.len() < Self::WIDTH {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        format!(
+                            "buffer too small: need {} bytes, got {}",
+                            Self::WIDTH,
+                            buf.len()
+                        ),
+                    ));
+                }
+                buf[..Self::WIDTH].copy_from_slice(&self.to_be_bytes());
+                Ok(())
+            }
 
-    fn read_be_bytes(buf: &[u8]) -> io::Result<Self> {
-        if buf.len() < Self::WIDTH {
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "not enough bytes for u16",
-            ));
+            fn read_be_bytes(buf: &[u8]) -> io::Result<Self> {
+                if buf.len() < Self::WIDTH {
+                    return Err(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        format!("not enough bytes for {}", stringify!($type)),
+                    ));
+                }
+                Ok(Self::from_be_bytes(buf[0..Self::WIDTH].try_into().unwrap()))
+            }
         }
-        Ok(u16::from_be_bytes([buf[0], buf[1]]))
-    }
+    };
 }
 
-impl Length for u32 {
-    const WIDTH: usize = 4;
-    const MAX: usize = u32::MAX as usize;
+impl_length_for!(u16);
+impl_length_for!(u32);
 
-    fn write_be_bytes(self, buf: &mut [u8]) -> io::Result<()> {
-        if buf.len() < Self::WIDTH {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                format!(
-                    "buffer too small: need {} bytes, got {}",
-                    Self::WIDTH,
-                    buf.len()
-                ),
-            ));
-        }
-        let bytes = self.to_be_bytes();
-        buf[0..Self::WIDTH].copy_from_slice(&bytes);
-        Ok(())
-    }
-
-    fn read_be_bytes(buf: &[u8]) -> io::Result<Self> {
-        if buf.len() < Self::WIDTH {
-            return Err(io::Error::new(
-                io::ErrorKind::UnexpectedEof,
-                "not enough bytes for u32",
-            ));
-        }
-        Ok(u32::from_be_bytes([buf[0], buf[1], buf[2], buf[3]]))
-    }
-}
+pub type Utf8Short<'a> = Utf8<'a, u16>;
+pub type Utf8Long<'a> = Utf8<'a, u32>;
 
 #[derive(Debug, PartialEq)]
 pub struct Utf8<'a, L: Length> {
