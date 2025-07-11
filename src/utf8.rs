@@ -1,4 +1,4 @@
-use crate::traits::{FromBytes, ToBytes};
+use crate::traits::{FromBytes, FromBytesRef, ToBytes};
 use std::borrow::{Borrow, Cow};
 use std::fmt::{Display, Formatter};
 use std::io;
@@ -157,21 +157,26 @@ where
     }
 }
 
-impl<'a, L> FromBytes<'a> for Utf8<'a, L>
+impl<'a, L> FromBytes for Utf8<'a, L>
 where
     L: Length + TryInto<usize>,
 {
     // 在需要时可以创建一份拥有所有权的数据副本(提供了灵活性)
-    fn from_bytes_owned(buf: &[u8]) -> Result<Self, io::Error> {
+    fn from_bytes(buf: &[u8]) -> Result<Self, io::Error> {
         let (length, val) = Self::parse(buf)?;
         Ok(Self {
             length,
             value: Cow::Owned(val.to_string()),
         })
     }
+}
 
+impl<'a, L> FromBytesRef<'a> for Utf8<'a, L>
+where
+    L: Length + TryInto<usize>,
+{
     // 零拷贝反序列化，当输入 &[u8] 的生命周期足够长时，可以直接借用其数据，避免了不必要的内存分配(提供了性能)
-    fn from_bytes_borrowed(buf: &'a [u8]) -> Result<Self, io::Error> {
+    fn from_bytes_ref(buf: &'a [u8]) -> Result<Self, io::Error> {
         let (length, val) = Self::parse(buf)?;
         Ok(Self {
             length,
@@ -297,7 +302,7 @@ mod tests {
         let utf8 = Utf8::new_borrowed(s).unwrap();
 
         let bytes = utf8.to_bytes().unwrap();
-        let parsed_utf8: Utf8<u16> = Utf8::from_bytes_borrowed(&bytes).unwrap();
+        let parsed_utf8: Utf8<u16> = Utf8::from_bytes_ref(&bytes).unwrap();
 
         assert_eq!(utf8, parsed_utf8);
         assert_eq!(parsed_utf8.as_ref(), s);
@@ -310,7 +315,7 @@ mod tests {
         let utf8 = Utf8::new_owned(s.clone()).unwrap();
 
         let bytes = utf8.to_bytes().unwrap();
-        let parsed_utf8: Utf8<u16> = Utf8::from_bytes_owned(&bytes).unwrap();
+        let parsed_utf8: Utf8<u16> = Utf8::from_bytes(&bytes).unwrap();
 
         assert_eq!(utf8, parsed_utf8);
         assert_eq!(*parsed_utf8, s);
@@ -326,7 +331,7 @@ mod tests {
         let bytes_written = utf8.write_bytes_to(&mut buffer).unwrap();
         assert_eq!(bytes_written, buffer.len());
 
-        let parsed: Utf8<u16> = Utf8::from_bytes_borrowed(&buffer).unwrap();
+        let parsed: Utf8<u16> = Utf8::from_bytes_ref(&buffer).unwrap();
         assert_eq!(parsed.as_ref(), s);
     }
 
@@ -344,7 +349,7 @@ mod tests {
     #[test]
     fn test_parse_insufficient_header() {
         let bytes = vec![0x00]; // Only 1 byte
-        let result: Result<Utf8<u16>, io::Error> = Utf8::from_bytes_borrowed(&bytes);
+        let result: Result<Utf8<u16>, io::Error> = Utf8::from_bytes_ref(&bytes);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().kind(), io::ErrorKind::UnexpectedEof);
     }
@@ -352,7 +357,7 @@ mod tests {
     #[test]
     fn test_parse_insufficient_data() {
         let bytes = vec![0x00, 0x0A, b'h', b'e', b'l', b'l', b'o']; // Declares length 10, but provides 5
-        let result: Result<Utf8<u16>, io::Error> = Utf8::from_bytes_borrowed(&bytes);
+        let result: Result<Utf8<u16>, io::Error> = Utf8::from_bytes_ref(&bytes);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().kind(), io::ErrorKind::UnexpectedEof);
     }
@@ -361,7 +366,7 @@ mod tests {
     fn test_parse_invalid_utf8() {
         // A byte slice with length prefix followed by invalid UTF-8 sequence
         let bytes = vec![0x00, 0x04, 0xff, 0xff, 0xff, 0xff];
-        let result: Result<Utf8<u16>, io::Error> = Utf8::from_bytes_borrowed(&bytes);
+        let result: Result<Utf8<u16>, io::Error> = Utf8::from_bytes_ref(&bytes);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().kind(), io::ErrorKind::InvalidData);
     }
@@ -373,7 +378,7 @@ mod tests {
         assert_eq!(utf8.length, 0);
         let bytes = utf8.to_bytes().unwrap();
         assert_eq!(bytes, vec![0x00, 0x00]);
-        let parsed: Utf8<u16> = Utf8::from_bytes_borrowed(&bytes).unwrap();
+        let parsed: Utf8<u16> = Utf8::from_bytes_ref(&bytes).unwrap();
         assert_eq!(parsed.as_ref(), "");
     }
 
@@ -417,7 +422,7 @@ mod tests {
         let utf8 = Utf8::<u32>::new_owned(s.clone()).unwrap();
 
         let bytes = utf8.to_bytes().unwrap();
-        let parsed_utf8 = Utf8::<u32>::from_bytes_owned(&bytes).unwrap();
+        let parsed_utf8 = Utf8::<u32>::from_bytes(&bytes).unwrap();
 
         assert_eq!(*parsed_utf8, s);
     }
@@ -434,7 +439,7 @@ mod tests {
         // 只添加少量数据
         bytes.extend_from_slice(b"insufficient");
 
-        let result: Result<Utf8<u32>, io::Error> = Utf8::from_bytes_borrowed(&bytes);
+        let result: Result<Utf8<u32>, io::Error> = Utf8::from_bytes_ref(&bytes);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().kind(), io::ErrorKind::UnexpectedEof);
     }
