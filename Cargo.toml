@@ -11,7 +11,7 @@ repository = "https://github.com/F2077/amf-rs"
 bitio-rs = "0.1.2"
 
 [dev-dependencies]
-criterion = "0.4"
+criterion = { version = "0.5", features = ["html_reports"] }
 itertools = "0.10.5"
 
 [features]
@@ -19,6 +19,6 @@ default = []
 bench = []  # 显式声明 bench 特性
 
 [[bench]]
-name = "read"
+name = "utf8_benchmark"
 harness = false
 
