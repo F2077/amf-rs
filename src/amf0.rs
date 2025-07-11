@@ -49,3 +49,54 @@ impl FromBytes for NumberType {
         Ok(Self { type_marker, value })
     }
 }
+
+//	An AMF 0 Boolean type is used to encode a primitive ActionScript 1.0 or 2.0 Boolean or
+//	an ActionScript 3.0 Boolean. The Object (non-primitive) version of ActionScript 1.0 or
+//	2.0 Booleans are not serializable. A Boolean type marker is followed by an unsigned
+//	byte; a zero byte value denotes false while a non-zero byte value (typically 1) denotes
+//	true.
+#[derive(Debug, PartialEq)]
+pub struct BooleanType {
+    type_marker: TypeMarker,
+    value: bool,
+}
+
+impl ToBytes for BooleanType {
+    fn to_bytes(&self) -> std::io::Result<Vec<u8>> {
+        let mut vec = Vec::with_capacity(1 + 1); // 1 byte for type marker + 1 byte for value
+        vec.push(self.type_marker as u8);
+        vec.push(self.value as u8);
+        Ok(vec)
+    }
+
+    fn bytes_size(&self) -> usize {
+        1 + 1
+    }
+
+    fn write_bytes_to(&self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if buf.len() < 2 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Buffer is too small, need at least 2 bytes",
+            ));
+        }
+        buf[0] = self.type_marker as u8;
+        buf[1] = self.value as u8;
+        Ok(2)
+    }
+}
+
+impl FromBytes for BooleanType {
+    fn from_bytes(buf: &[u8]) -> std::io::Result<Self> {
+        if buf.len() < 2 {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Buffer is too small, need at least 2 bytes",
+            ));
+        }
+        let type_marker = TypeMarker::try_from(buf[0])
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        let value = buf[1] != 0;
+        Ok(Self { type_marker, value })
+    }
+}
