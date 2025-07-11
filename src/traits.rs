@@ -1,8 +1,8 @@
 use std::io;
 
 pub trait ToBytes {
-    fn to_bytes(&self) -> Vec<u8>;
-    fn bytes_size(&self) -> u16;
+    fn to_bytes(&self) -> io::Result<Vec<u8>>;
+    fn bytes_size(&self) -> usize;
     fn write_bytes_to(&self, buf: &mut [u8]) -> io::Result<usize>;
 }
 pub trait FromBytes<'a>: Sized {
