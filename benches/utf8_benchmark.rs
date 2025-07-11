@@ -1,3 +1,4 @@
+use amf_rs::traits::{FromBytes, ToBytes};
 use amf_rs::utf8::Utf8;
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use std::borrow::Cow;
@@ -25,12 +26,12 @@ fn bench_serialization(c: &mut Criterion) {
     // 2. 测试 write_to (写入已分配的 buffer)
     let mut short_buffer = vec![0; utf8_short.bytes_size() as usize];
     group.bench_function("write_to (short)", |b| {
-        b.iter(|| utf8_short.write_to(black_box(&mut short_buffer)))
+        b.iter(|| utf8_short.write_bytes_to(black_box(&mut short_buffer)))
     });
 
     let mut long_buffer = vec![0; utf8_long.bytes_size() as usize];
     group.bench_function("write_to (long)", |b| {
-        b.iter(|| utf8_long.write_to(black_box(&mut long_buffer)))
+        b.iter(|| utf8_long.write_bytes_to(black_box(&mut long_buffer)))
     });
 
     group.finish();

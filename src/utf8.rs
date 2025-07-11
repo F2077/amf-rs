@@ -1,3 +1,4 @@
+use crate::traits::{FromBytes, ToBytes};
 use std::borrow::{Borrow, Cow};
 use std::fmt::{Display, Formatter};
 use std::io;
@@ -60,19 +61,19 @@ impl<'a> Utf8<'a> {
     }
 }
 
-impl<'a> Utf8<'a> {
-    pub fn to_bytes(&self) -> Vec<u8> {
+impl<'a> ToBytes for Utf8<'a> {
+    fn to_bytes(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(2 + self.length as usize);
         buf.extend_from_slice(self.length.to_be_bytes().as_slice());
         buf.extend_from_slice(self.value.as_bytes());
         buf
     }
 
-    pub fn bytes_size(&self) -> u16 {
+    fn bytes_size(&self) -> u16 {
         2 + self.length
     }
 
-    pub fn write_to(&self, buffer: &mut [u8]) -> Result<usize, io::Error> {
+    fn write_bytes_to(&self, buffer: &mut [u8]) -> Result<usize, io::Error> {
         let required_size = self.bytes_size() as usize;
         let buffer_len = buffer.len();
         if buffer_len < required_size {
@@ -92,18 +93,9 @@ impl<'a> Utf8<'a> {
     }
 }
 
-impl<'a> Utf8<'a> {
-    // 实现了零拷贝反序列化，当输入 &[u8] 的生命周期足够长时，可以直接借用其数据，避免了不必要的内存分配
-    pub fn from_bytes_borrowed(buf: &'a [u8]) -> Result<Self, io::Error> {
-        let (len, val) = Self::parse(buf)?;
-        Ok(Self {
-            length: len,
-            value: Cow::Borrowed(val),
-        })
-    }
-
+impl<'a> FromBytes<'a> for Utf8<'a> {
     // 提供了灵活性，在需要时可以创建一份拥有所有权的数据副本
-    pub fn from_bytes_owned(buf: &[u8]) -> Result<Self, io::Error> {
+    fn from_bytes_owned(buf: &[u8]) -> Result<Self, io::Error> {
         let (len, val) = Self::parse(buf)?;
         Ok(Self {
             length: len,
@@ -111,6 +103,17 @@ impl<'a> Utf8<'a> {
         })
     }
 
+    // 实现了零拷贝反序列化，当输入 &[u8] 的生命周期足够长时，可以直接借用其数据，避免了不必要的内存分配
+    fn from_bytes_borrowed(buf: &'a [u8]) -> Result<Self, io::Error> {
+        let (len, val) = Self::parse(buf)?;
+        Ok(Self {
+            length: len,
+            value: Cow::Borrowed(val),
+        })
+    }
+}
+
+impl<'a> Utf8<'a> {
     fn parse(buf: &[u8]) -> io::Result<(u16, &str)> {
         if buf.len() < 2 {
             return Err(io::Error::new(
@@ -251,7 +254,7 @@ mod tests {
         let utf8 = Utf8::new_borrowed(s).unwrap();
         let mut buffer = vec![0; utf8.bytes_size() as usize];
 
-        let bytes_written = utf8.write_to(&mut buffer).unwrap();
+        let bytes_written = utf8.write_bytes_to(&mut buffer).unwrap();
         assert_eq!(bytes_written, buffer.len());
 
         let parsed = Utf8::from_bytes_borrowed(&buffer).unwrap();
@@ -264,7 +267,7 @@ mod tests {
         let utf8 = Utf8::new_borrowed(s).unwrap();
         let mut buffer = vec![0; 4]; // Too small
 
-        let result = utf8.write_to(&mut buffer);
+        let result = utf8.write_bytes_to(&mut buffer);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().kind(), io::ErrorKind::InvalidInput);
     }
