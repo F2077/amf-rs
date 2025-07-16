@@ -1,8 +1,9 @@
 use crate::traits::{FromBytes, ToBytes};
 use crate::type_marker::TypeMarker;
 use crate::utf8;
-use crate::utf8::Utf8;
+use crate::utf8::{AmfUtf8, Length, Utf8};
 use indexmap::IndexMap;
+use std::fmt::Debug;
 use std::io;
 
 pub trait AmfType: ToBytes + FromBytes {}
@@ -149,49 +150,30 @@ impl FromBytes for BooleanType {
     }
 }
 
-//	All strings in AMF are encoded using UTF-8; however, the byte-length header format
-//	may vary. The AMF 0 String type uses the standard byte-length header (i.e. U16). For
-//	long Strings that require more than 65535 bytes to encode in UTF-8, the AMF 0 Long
-//	String type should be used.
 #[derive(Debug, PartialEq)]
-pub struct StringType<'a> {
-    type_marker: TypeMarker,
-    value: Utf8<'a>,
+pub struct AmfUtf8ValuedType<'a, L: Length, const M: u8> {
+    inner: AmfUtf8<'a, L>,
 }
 
-impl<'a> StringType<'a> {
-    pub fn new_owned(value: String) -> Result<Self, io::Error> {
-        let value_utf8 = Utf8::new_owned(value)?;
-        Ok(Self {
-            type_marker: TypeMarker::String,
-            value: value_utf8,
-        })
-    }
-
-    pub fn new_borrowed(value: &'a str) -> Result<Self, io::Error> {
-        let value_utf8 = Utf8::new_borrowed(value)?;
-        Ok(Self {
-            type_marker: TypeMarker::String,
-            value: value_utf8,
-        })
+impl<'a, L: Length + TryInto<usize>, const M: u8> AmfUtf8ValuedType<'a, L, M> {
+    pub fn new(inner: AmfUtf8<'a, L>) -> Self {
+        Self { inner }
     }
 }
 
-impl<'a> ToBytes for StringType<'a> {
+impl<'a, L: Length + TryInto<usize>, const M: u8> ToBytes for AmfUtf8ValuedType<'a, L, M> {
     fn to_bytes(&self) -> io::Result<Vec<u8>> {
-        debug_assert!(self.type_marker == TypeMarker::String);
         let mut vec = Vec::with_capacity(self.bytes_size());
-        vec.push(self.type_marker as u8);
-        let _ = self.value.write_bytes_to(&mut vec[1..])?;
+        vec.push(M);
+        let _ = self.inner.write_bytes_to(&mut vec[1..])?;
         Ok(vec)
     }
 
     fn bytes_size(&self) -> usize {
-        1 + self.value.bytes_size()
+        1 + self.inner.bytes_size()
     }
 
     fn write_bytes_to(&self, buf: &mut [u8]) -> io::Result<usize> {
-        debug_assert!(self.type_marker == TypeMarker::String);
         let required_size = self.bytes_size();
         if buf.len() < required_size {
             return Err(io::Error::new(
@@ -199,12 +181,48 @@ impl<'a> ToBytes for StringType<'a> {
                 format!("Buffer is too small, need at least {} bytes", required_size),
             ));
         }
-        buf[0] = self.type_marker as u8;
-        let n = self.value.write_bytes_to(&mut buf[1..])?;
-
+        buf[0] = M;
+        let n = self.inner.write_bytes_to(&mut buf[1..])?;
         Ok(1 + n)
     }
 }
+
+impl<'a, L: Length + TryInto<usize>, const M: u8> FromBytes for AmfUtf8ValuedType<'a, L, M> {
+    fn from_bytes(buf: &[u8]) -> io::Result<(Self, usize)> {
+        let required_size = 1 + L::WIDTH;
+        if buf.len() < required_size {
+            return Err(io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Buffer is too small, need at least {} bytes", required_size),
+            ));
+        }
+
+        let type_marker = TypeMarker::try_from(buf[0])
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        if buf[0] != M {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Invalid type marker, expected String, got {:?}",
+                    type_marker
+                ),
+            ));
+        }
+        let inner = AmfUtf8::from_bytes(&buf[1..])?;
+        Ok((Self::new(inner.0), 1 + inner.1))
+    }
+}
+
+//	All strings in AMF are encoded using UTF-8; however, the byte-length header format
+//	may vary. The AMF 0 String type uses the standard byte-length header (i.e. U16). For
+//	long Strings that require more than 65535 bytes to encode in UTF-8, the AMF 0 Long
+//	String type should be used.
+pub type StringType<'a> = AmfUtf8ValuedType<'a, u16, { TypeMarker::String as u8 }>;
+
+//	A long string is used in AMF 0 to encode strings that would occupy more than 65535
+//	bytes when UTF-8 encoded. The byte-length header of the UTF-8 encoded string is a 32-
+//	bit integer instead of the regular 16-bit integer.
+pub type LongStringType<'a> = AmfUtf8ValuedType<'a, u32, { TypeMarker::LongString as u8 }>;
 
 #[derive(Debug, PartialEq)]
 pub struct ObjectEndType {
@@ -416,7 +434,7 @@ impl<'a, T: AmfType> FromBytes for ObjectType<'a, T> {
     }
 }
 
-pub trait MarkerType: Sized {
+trait MarkerType: Sized {
     const TYPE_MARKER: TypeMarker;
 }
 
