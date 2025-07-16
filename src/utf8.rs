@@ -48,11 +48,20 @@ macro_rules! impl_length_for {
 impl_length_for!(u16);
 impl_length_for!(u32);
 
-pub type Utf8Short<'a> = Utf8<'a, u16>;
-pub type Utf8Long<'a> = Utf8<'a, u32>;
+pub type Utf8<'a> = AmfUtf8<'a, u16>;
+pub type Utf8Long<'a> = AmfUtf8<'a, u32>;
+
+pub const EMPTY_UTF8: Utf8<'static> = AmfUtf8 {
+    length: 0u16,
+    value: Cow::Borrowed(""),
+};
+pub const EMPTY_UTF8_LONG: Utf8Long<'static> = AmfUtf8 {
+    length: 0u32,
+    value: Cow::Borrowed(""),
+};
 
 #[derive(Debug, PartialEq)]
-pub struct Utf8<'a, L: Length> {
+pub struct AmfUtf8<'a, L: Length> {
     length: L,
     /// UTF-8 string value storage field
     ///
@@ -84,7 +93,7 @@ pub struct Utf8<'a, L: Length> {
     value: Cow<'a, str>, // 智能指针能在性能与灵活性之间取得平衡
 }
 
-impl<'a, L> Utf8<'a, L>
+impl<'a, L> AmfUtf8<'a, L>
 where
     L: Length + TryFrom<usize>,
 {
@@ -102,19 +111,48 @@ where
                 "Length conversion failed unexpectedly",
             )
         })?;
-        Ok(Utf8 { length, value })
+        Ok(Self { length, value })
     }
 
     pub fn new_owned(value: String) -> Result<Self, io::Error> {
-        Utf8::new(Cow::Owned(value))
+        Self::new(Cow::Owned(value))
     }
 
     pub fn new_borrowed(value: &'a str) -> Result<Self, io::Error> {
-        Utf8::new(Cow::Borrowed(value))
+        Self::new(Cow::Borrowed(value))
     }
 }
 
-impl<'a, L> ToBytes for Utf8<'a, L>
+impl<L> AmfUtf8<'static, L>
+where
+    L: Length + TryFrom<usize>,
+{
+    pub fn new_static(value: &'static str) -> Result<Self, io::Error> {
+        let len = value.len();
+        if len > L::MAX {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("AMF utf8 length {} exceeds max({})", len, L::MAX),
+            ));
+        }
+        let length = L::try_from(len).map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Length conversion failed unexpectedly",
+            )
+        })?;
+        Ok(Self {
+            length,
+            value: Cow::Borrowed(value),
+        })
+    }
+
+    pub fn new_empty() -> Result<Self, io::Error> {
+        Self::new_static("")
+    }
+}
+
+impl<'a, L> ToBytes for AmfUtf8<'a, L>
 where
     L: Length + TryInto<usize>,
 {
@@ -157,7 +195,7 @@ where
     }
 }
 
-impl<'a, L> FromBytes for Utf8<'a, L>
+impl<'a, L> FromBytes for AmfUtf8<'a, L>
 where
     L: Length + TryInto<usize>,
 {
@@ -171,7 +209,7 @@ where
     }
 }
 
-impl<'a, L> FromBytesRef<'a> for Utf8<'a, L>
+impl<'a, L> FromBytesRef<'a> for AmfUtf8<'a, L>
 where
     L: Length + TryInto<usize>,
 {
@@ -185,7 +223,7 @@ where
     }
 }
 
-impl<'a, L> Utf8<'a, L>
+impl<'a, L> AmfUtf8<'a, L>
 where
     L: Length + TryInto<usize>,
 {
@@ -219,7 +257,7 @@ where
 }
 
 // 让 Utf8 可以像 &str 一样被使用（例如：my_utf8.len(), my_utf8.starts_with("...")）
-impl<'a, L: Length> Deref for Utf8<'a, L> {
+impl<'a, L: Length> Deref for AmfUtf8<'a, L> {
     type Target = str;
 
     fn deref(&self) -> &Self::Target {
@@ -228,41 +266,41 @@ impl<'a, L: Length> Deref for Utf8<'a, L> {
 }
 
 // 提供从 &Utf8 到 &str 的显式转换
-impl<'a, L: Length> AsRef<str> for Utf8<'a, L> {
+impl<'a, L: Length> AsRef<str> for AmfUtf8<'a, L> {
     fn as_ref(&self) -> &str {
         &self.value
     }
 }
 
 // 允许在需要 &str 的地方（如 HashMap 的 key）使用 &Utf8
-impl<'a, L: Length> Borrow<str> for Utf8<'a, L> {
+impl<'a, L: Length> Borrow<str> for AmfUtf8<'a, L> {
     fn borrow(&self) -> &str {
         &self.value
     }
 }
 
 // 允许直接打印 Utf8 实例
-impl<'a, L: Length> Display for Utf8<'a, L> {
+impl<'a, L: Length> Display for AmfUtf8<'a, L> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.value)
     }
 }
 
 // 提供符合惯例的、可能失败的转换方式 (from a borrowed string)
-impl<'a, L: Length + TryFrom<usize>> TryFrom<&'a str> for Utf8<'a, L> {
+impl<'a, L: Length + TryFrom<usize>> TryFrom<&'a str> for AmfUtf8<'a, L> {
     type Error = io::Error;
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        Utf8::new_borrowed(value)
+        AmfUtf8::new_borrowed(value)
     }
 }
 
 // 提供符合惯例的、可能失败的转换方式 (from an owned string)
-impl<'a, L: Length + TryFrom<usize>> TryFrom<String> for Utf8<'a, L> {
+impl<'a, L: Length + TryFrom<usize>> TryFrom<String> for AmfUtf8<'a, L> {
     type Error = io::Error;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
-        Utf8::new_owned(value)
+        AmfUtf8::new_owned(value)
     }
 }
 
@@ -274,7 +312,7 @@ mod tests {
     #[test]
     fn test_new_borrowed_success() {
         let s = "hello";
-        let utf8: Utf8<u16> = Utf8::new_borrowed(s).unwrap();
+        let utf8: AmfUtf8<u16> = AmfUtf8::new_borrowed(s).unwrap();
         assert_eq!(utf8.length, 5);
         assert_eq!(utf8.value.as_ref(), "hello");
         assert!(matches!(utf8.value, Cow::Borrowed(_)));
@@ -283,7 +321,7 @@ mod tests {
     #[test]
     fn test_new_owned_success() {
         let s = "world".to_string();
-        let utf8: Utf8<u16> = Utf8::new_owned(s).unwrap();
+        let utf8: AmfUtf8<u16> = AmfUtf8::new_owned(s).unwrap();
         assert_eq!(utf8.length, 5);
         assert_eq!(utf8.value.as_ref(), "world");
         assert!(matches!(utf8.value, Cow::Owned(_)));
@@ -292,17 +330,17 @@ mod tests {
     #[test]
     fn test_string_too_long() {
         let long_string = "a".repeat(u16::MAX as usize + 1);
-        let result: Result<Utf8<u16>, io::Error> = Utf8::new_owned(long_string);
+        let result: Result<AmfUtf8<u16>, io::Error> = AmfUtf8::new_owned(long_string);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_roundtrip_borrowed() {
         let s = "你好, world!";
-        let utf8 = Utf8::new_borrowed(s).unwrap();
+        let utf8 = AmfUtf8::new_borrowed(s).unwrap();
 
         let bytes = utf8.to_bytes().unwrap();
-        let parsed_utf8: Utf8<u16> = Utf8::from_bytes_ref(&bytes).unwrap();
+        let parsed_utf8: AmfUtf8<u16> = AmfUtf8::from_bytes_ref(&bytes).unwrap();
 
         assert_eq!(utf8, parsed_utf8);
         assert_eq!(parsed_utf8.as_ref(), s);
@@ -312,10 +350,10 @@ mod tests {
     #[test]
     fn test_roundtrip_owned() {
         let s = "你好, world!".to_string();
-        let utf8 = Utf8::new_owned(s.clone()).unwrap();
+        let utf8 = AmfUtf8::new_owned(s.clone()).unwrap();
 
         let bytes = utf8.to_bytes().unwrap();
-        let parsed_utf8: Utf8<u16> = Utf8::from_bytes(&bytes).unwrap();
+        let parsed_utf8: AmfUtf8<u16> = AmfUtf8::from_bytes(&bytes).unwrap();
 
         assert_eq!(utf8, parsed_utf8);
         assert_eq!(*parsed_utf8, s);
@@ -325,20 +363,20 @@ mod tests {
     #[test]
     fn test_write_to_and_parse() {
         let s = "test write_to";
-        let utf8: Utf8<u16> = Utf8::new_borrowed(s).unwrap();
+        let utf8: AmfUtf8<u16> = AmfUtf8::new_borrowed(s).unwrap();
         let mut buffer = vec![0; utf8.bytes_size()];
 
         let bytes_written = utf8.write_bytes_to(&mut buffer).unwrap();
         assert_eq!(bytes_written, buffer.len());
 
-        let parsed: Utf8<u16> = Utf8::from_bytes_ref(&buffer).unwrap();
+        let parsed: AmfUtf8<u16> = AmfUtf8::from_bytes_ref(&buffer).unwrap();
         assert_eq!(parsed.as_ref(), s);
     }
 
     #[test]
     fn test_write_to_small_buffer() {
         let s = "short";
-        let utf8: Utf8<u16> = Utf8::new_borrowed(s).unwrap();
+        let utf8: AmfUtf8<u16> = AmfUtf8::new_borrowed(s).unwrap();
         let mut buffer = vec![0; 4]; // Too small
 
         let result = utf8.write_bytes_to(&mut buffer);
@@ -349,7 +387,7 @@ mod tests {
     #[test]
     fn test_parse_insufficient_header() {
         let bytes = vec![0x00]; // Only 1 byte
-        let result: Result<Utf8<u16>, io::Error> = Utf8::from_bytes_ref(&bytes);
+        let result: Result<AmfUtf8<u16>, io::Error> = AmfUtf8::from_bytes_ref(&bytes);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().kind(), io::ErrorKind::UnexpectedEof);
     }
@@ -357,7 +395,7 @@ mod tests {
     #[test]
     fn test_parse_insufficient_data() {
         let bytes = vec![0x00, 0x0A, b'h', b'e', b'l', b'l', b'o']; // Declares length 10, but provides 5
-        let result: Result<Utf8<u16>, io::Error> = Utf8::from_bytes_ref(&bytes);
+        let result: Result<AmfUtf8<u16>, io::Error> = AmfUtf8::from_bytes_ref(&bytes);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().kind(), io::ErrorKind::UnexpectedEof);
     }
@@ -366,7 +404,7 @@ mod tests {
     fn test_parse_invalid_utf8() {
         // A byte slice with length prefix followed by invalid UTF-8 sequence
         let bytes = vec![0x00, 0x04, 0xff, 0xff, 0xff, 0xff];
-        let result: Result<Utf8<u16>, io::Error> = Utf8::from_bytes_ref(&bytes);
+        let result: Result<AmfUtf8<u16>, io::Error> = AmfUtf8::from_bytes_ref(&bytes);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().kind(), io::ErrorKind::InvalidData);
     }
@@ -374,29 +412,29 @@ mod tests {
     #[test]
     fn test_empty_string_roundtrip() {
         let s = "";
-        let utf8: Utf8<u16> = Utf8::new_borrowed(s).unwrap();
+        let utf8: AmfUtf8<u16> = AmfUtf8::new_borrowed(s).unwrap();
         assert_eq!(utf8.length, 0);
         let bytes = utf8.to_bytes().unwrap();
         assert_eq!(bytes, vec![0x00, 0x00]);
-        let parsed: Utf8<u16> = Utf8::from_bytes_ref(&bytes).unwrap();
+        let parsed: AmfUtf8<u16> = AmfUtf8::from_bytes_ref(&bytes).unwrap();
         assert_eq!(parsed.as_ref(), "");
     }
 
     #[test]
     fn test_try_from_trait() {
         let s = "hello from trait";
-        let utf8: Utf8<u16> = Utf8::try_from(s).unwrap();
+        let utf8: AmfUtf8<u16> = AmfUtf8::try_from(s).unwrap();
         assert_eq!(utf8.as_ref(), s);
 
         let s_owned = "owned trait".to_string();
-        let utf8_owned: Utf8<u16> = Utf8::try_from(s_owned).unwrap();
+        let utf8_owned: AmfUtf8<u16> = AmfUtf8::try_from(s_owned).unwrap();
         assert_eq!(utf8_owned.as_ref(), "owned trait");
     }
 
     #[test]
     fn test_deref_and_as_ref() {
         let s = "check deref";
-        let utf8: Utf8<u16> = Utf8::new_borrowed(s).unwrap();
+        let utf8: AmfUtf8<u16> = AmfUtf8::new_borrowed(s).unwrap();
         // Deref in action
         assert!(utf8.starts_with("check"));
         // AsRef in action
@@ -409,7 +447,7 @@ mod tests {
         // 创建长度刚好为 u32::MAX 的字符串（仅测试长度值，不实际分配内存）
         let length = u32::MAX;
         let value = "a".repeat(length as usize);
-        let utf8: Utf8<u32> = Utf8::new_owned(value.clone()).unwrap();
+        let utf8: AmfUtf8<u32> = AmfUtf8::new_owned(value.clone()).unwrap();
 
         assert_eq!(utf8.length, length);
         assert_eq!(utf8.value.len(), length as usize);
@@ -419,10 +457,10 @@ mod tests {
     fn test_u32_roundtrip_large_string() {
         // 创建稍大于 u16::MAX 的字符串（65,536 字符）
         let s = "a".repeat(65_536);
-        let utf8 = Utf8::<u32>::new_owned(s.clone()).unwrap();
+        let utf8 = AmfUtf8::<u32>::new_owned(s.clone()).unwrap();
 
         let bytes = utf8.to_bytes().unwrap();
-        let parsed_utf8 = Utf8::<u32>::from_bytes(&bytes).unwrap();
+        let parsed_utf8 = AmfUtf8::<u32>::from_bytes(&bytes).unwrap();
 
         assert_eq!(*parsed_utf8, s);
     }
@@ -439,7 +477,7 @@ mod tests {
         // 只添加少量数据
         bytes.extend_from_slice(b"insufficient");
 
-        let result: Result<Utf8<u32>, io::Error> = Utf8::from_bytes_ref(&bytes);
+        let result: Result<AmfUtf8<u32>, io::Error> = AmfUtf8::from_bytes_ref(&bytes);
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().kind(), io::ErrorKind::UnexpectedEof);
     }
@@ -447,7 +485,7 @@ mod tests {
     #[test]
     fn test_u32_to_bytes() {
         let s = "u32 length test";
-        let utf8 = Utf8::<u32>::new_borrowed(s).unwrap();
+        let utf8 = AmfUtf8::<u32>::new_borrowed(s).unwrap();
         let bytes = utf8.to_bytes().unwrap();
 
         // 验证长度前缀 (4字节大端)
@@ -459,7 +497,7 @@ mod tests {
     #[test]
     fn test_u32_write_to_buffer() {
         let s = "buffer write test with u32";
-        let utf8 = Utf8::<u32>::new_borrowed(s).unwrap();
+        let utf8 = AmfUtf8::<u32>::new_borrowed(s).unwrap();
         let mut buffer = vec![0; utf8.bytes_size()];
 
         utf8.write_bytes_to(&mut buffer).unwrap();

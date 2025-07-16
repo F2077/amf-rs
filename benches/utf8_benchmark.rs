@@ -1,5 +1,5 @@
 use amf_rs::traits::{FromBytes, FromBytesRef, ToBytes};
-use amf_rs::utf8::{Length, Utf8};
+use amf_rs::utf8::{AmfUtf8, Length};
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 /// 生成测试数据：短串和长串
@@ -20,8 +20,8 @@ fn benchmark_data<L: Length>() -> (&'static str, String) {
 
 pub fn bench_serialization_u16(c: &mut Criterion) {
     let (short_str, long_owned) = benchmark_data::<u16>();
-    let utf8_short = Utf8::<'_, u16>::new_borrowed(short_str).unwrap();
-    let utf8_long = Utf8::<'_, u16>::new_owned(long_owned).unwrap();
+    let utf8_short = AmfUtf8::<'_, u16>::new_borrowed(short_str).unwrap();
+    let utf8_long = AmfUtf8::<'_, u16>::new_owned(long_owned).unwrap();
 
     let mut group = c.benchmark_group("Serialization (u16)");
     // to_bytes
@@ -41,11 +41,11 @@ pub fn bench_serialization_u16(c: &mut Criterion) {
 
 pub fn bench_deserialization_u16(c: &mut Criterion) {
     let (short_str, long_owned) = benchmark_data::<u16>();
-    let bytes_short = Utf8::<'_, u16>::new_borrowed(short_str)
+    let bytes_short = AmfUtf8::<'_, u16>::new_borrowed(short_str)
         .unwrap()
         .to_bytes()
         .unwrap();
-    let bytes_long = Utf8::<'_, u16>::new_owned(long_owned)
+    let bytes_long = AmfUtf8::<'_, u16>::new_owned(long_owned)
         .unwrap()
         .to_bytes()
         .unwrap();
@@ -53,17 +53,17 @@ pub fn bench_deserialization_u16(c: &mut Criterion) {
     let mut group = c.benchmark_group("Deserialization (u16)");
     // zero-copy borrow
     group.bench_function("from_bytes_ref (short)", |b| {
-        b.iter(|| Utf8::<'_, u16>::from_bytes_ref(black_box(&bytes_short)))
+        b.iter(|| AmfUtf8::<'_, u16>::from_bytes_ref(black_box(&bytes_short)))
     });
     group.bench_function("from_bytes_ref (long)", |b| {
-        b.iter(|| Utf8::<'_, u16>::from_bytes_ref(black_box(&bytes_long)))
+        b.iter(|| AmfUtf8::<'_, u16>::from_bytes_ref(black_box(&bytes_long)))
     });
     // owned-copy
     group.bench_function("from_bytes (short)", |b| {
-        b.iter(|| Utf8::<'_, u16>::from_bytes(black_box(&bytes_short)))
+        b.iter(|| AmfUtf8::<'_, u16>::from_bytes(black_box(&bytes_short)))
     });
     group.bench_function("from_bytes (long)", |b| {
-        b.iter(|| Utf8::<'_, u16>::from_bytes(black_box(&bytes_long)))
+        b.iter(|| AmfUtf8::<'_, u16>::from_bytes(black_box(&bytes_long)))
     });
     group.finish();
 }
@@ -72,10 +72,10 @@ pub fn bench_construction_u16(c: &mut Criterion) {
     let (short_str, long_owned) = benchmark_data::<u16>();
     let mut group = c.benchmark_group("Construction (u16)");
     group.bench_function("new_borrowed (short)", |b| {
-        b.iter(|| Utf8::<'_, u16>::new_borrowed(black_box(short_str)))
+        b.iter(|| AmfUtf8::<'_, u16>::new_borrowed(black_box(short_str)))
     });
     group.bench_function("new_owned (long)", |b| {
-        b.iter(|| Utf8::<'_, u16>::new_owned(black_box(long_owned.clone())))
+        b.iter(|| AmfUtf8::<'_, u16>::new_owned(black_box(long_owned.clone())))
     });
     group.finish();
 }
@@ -86,8 +86,8 @@ pub fn bench_construction_u16(c: &mut Criterion) {
 
 pub fn bench_serialization_u32(c: &mut Criterion) {
     let (short_str, long_owned) = benchmark_data::<u32>();
-    let utf8_short = Utf8::<'_, u32>::new_borrowed(short_str).unwrap();
-    let utf8_long = Utf8::<'_, u32>::new_owned(long_owned).unwrap();
+    let utf8_short = AmfUtf8::<'_, u32>::new_borrowed(short_str).unwrap();
+    let utf8_long = AmfUtf8::<'_, u32>::new_owned(long_owned).unwrap();
 
     let mut group = c.benchmark_group("Serialization (u32)");
     group.bench_function("to_bytes (short)", |b| b.iter(|| utf8_short.to_bytes()));
@@ -105,27 +105,27 @@ pub fn bench_serialization_u32(c: &mut Criterion) {
 
 pub fn bench_deserialization_u32(c: &mut Criterion) {
     let (short_str, long_owned) = benchmark_data::<u32>();
-    let bytes_short = Utf8::<'_, u32>::new_borrowed(short_str)
+    let bytes_short = AmfUtf8::<'_, u32>::new_borrowed(short_str)
         .unwrap()
         .to_bytes()
         .unwrap();
-    let bytes_long = Utf8::<'_, u32>::new_owned(long_owned)
+    let bytes_long = AmfUtf8::<'_, u32>::new_owned(long_owned)
         .unwrap()
         .to_bytes()
         .unwrap();
 
     let mut group = c.benchmark_group("Deserialization (u32)");
     group.bench_function("from_bytes_ref (short)", |b| {
-        b.iter(|| Utf8::<'_, u32>::from_bytes_ref(black_box(&bytes_short)))
+        b.iter(|| AmfUtf8::<'_, u32>::from_bytes_ref(black_box(&bytes_short)))
     });
     group.bench_function("from_bytes_ref (long)", |b| {
-        b.iter(|| Utf8::<'_, u32>::from_bytes_ref(black_box(&bytes_long)))
+        b.iter(|| AmfUtf8::<'_, u32>::from_bytes_ref(black_box(&bytes_long)))
     });
     group.bench_function("from_bytes (short)", |b| {
-        b.iter(|| Utf8::<'_, u32>::from_bytes(black_box(&bytes_short)))
+        b.iter(|| AmfUtf8::<'_, u32>::from_bytes(black_box(&bytes_short)))
     });
     group.bench_function("from_bytes (long)", |b| {
-        b.iter(|| Utf8::<'_, u32>::from_bytes(black_box(&bytes_long)))
+        b.iter(|| AmfUtf8::<'_, u32>::from_bytes(black_box(&bytes_long)))
     });
     group.finish();
 }
@@ -134,10 +134,10 @@ pub fn bench_construction_u32(c: &mut Criterion) {
     let (short_str, long_owned) = benchmark_data::<u32>();
     let mut group = c.benchmark_group("Construction (u32)");
     group.bench_function("new_borrowed (short)", |b| {
-        b.iter(|| Utf8::<'_, u32>::new_borrowed(black_box(short_str)))
+        b.iter(|| AmfUtf8::<'_, u32>::new_borrowed(black_box(short_str)))
     });
     group.bench_function("new_owned (long)", |b| {
-        b.iter(|| Utf8::<'_, u32>::new_owned(black_box(long_owned.clone())))
+        b.iter(|| AmfUtf8::<'_, u32>::new_owned(black_box(long_owned.clone())))
     });
     group.finish();
 }
