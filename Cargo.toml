@@ -8,6 +8,7 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/F2077/amf-rs"
 
 [dependencies]
+indexmap = "2.10.0"
 bitio-rs = "0.1.2"
 
 [dev-dependencies]
