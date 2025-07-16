@@ -416,26 +416,14 @@ impl<'a, T: AmfType> FromBytes for ObjectType<'a, T> {
     }
 }
 
-//	The null type is represented by the null type marker. No further information is encoded
-//	for this value.
-#[derive(Debug, PartialEq)]
-pub struct NullType {
-    type_marker: TypeMarker,
+pub trait MarkerType: Sized {
+    const TYPE_MARKER: TypeMarker;
 }
 
-impl NullType {
-    pub fn new() -> Self {
-        Self {
-            type_marker: TypeMarker::Null,
-        }
-    }
-}
-
-impl ToBytes for NullType {
+impl<M: MarkerType> ToBytes for M {
     fn to_bytes(&self) -> io::Result<Vec<u8>> {
-        debug_assert!(self.type_marker == TypeMarker::Null);
         let mut vec = Vec::with_capacity(self.bytes_size());
-        vec.push(self.type_marker as u8);
+        vec.push(M::TYPE_MARKER as u8);
         Ok(vec)
     }
 
@@ -444,19 +432,18 @@ impl ToBytes for NullType {
     }
 
     fn write_bytes_to(&self, buf: &mut [u8]) -> io::Result<usize> {
-        debug_assert!(self.type_marker == TypeMarker::Null);
         if buf.len() < 1 {
             return Err(io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "Buffer is too small, need at least 1 byte",
             ));
         }
-        buf[0] = self.type_marker as u8;
+        buf[0] = M::TYPE_MARKER as u8;
         Ok(1)
     }
 }
 
-impl FromBytes for NullType {
+impl<M: MarkerType + Default> FromBytes for M {
     fn from_bytes(buf: &[u8]) -> io::Result<(Self, usize)> {
         if buf.len() < 1 {
             return Err(io::Error::new(
@@ -466,12 +453,34 @@ impl FromBytes for NullType {
         }
         let type_marker = TypeMarker::try_from(buf[0])
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        if type_marker != TypeMarker::Null {
+        if type_marker != M::TYPE_MARKER {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("Invalid type marker, expected Null, got {:?}", type_marker),
+                format!(
+                    "Invalid type marker, expected {:?}, got {:?}",
+                    M::TYPE_MARKER,
+                    type_marker
+                ),
             ));
         }
-        Ok((Self { type_marker }, 1))
+        Ok((M::default(), 1))
     }
+}
+
+//	The null type is represented by the null type marker. No further information is encoded
+//	for this value.
+#[derive(Debug, PartialEq, Default)]
+pub struct NullType;
+
+impl MarkerType for NullType {
+    const TYPE_MARKER: TypeMarker = TypeMarker::Null;
+}
+
+//    The undefined type is represented by the undefined type marker. No further information is encoded
+//    for this value.
+#[derive(Debug, PartialEq, Default)]
+pub struct UndefinedType;
+
+impl MarkerType for UndefinedType {
+    const TYPE_MARKER: TypeMarker = TypeMarker::Undefined;
 }
