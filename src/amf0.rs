@@ -54,7 +54,7 @@ impl ToBytes for NumberType {
 }
 
 impl FromBytes for NumberType {
-    fn from_bytes(buf: &[u8]) -> io::Result<Self> {
+    fn from_bytes(buf: &[u8]) -> io::Result<(Self, usize)> {
         if buf.len() < 9 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
@@ -73,7 +73,7 @@ impl FromBytes for NumberType {
             ));
         }
         let value = f64::from_be_bytes(buf[1..9].try_into().unwrap());
-        Ok(Self { type_marker, value })
+        Ok((Self { type_marker, value }, 9))
     }
 }
 
@@ -126,7 +126,7 @@ impl ToBytes for BooleanType {
 }
 
 impl FromBytes for BooleanType {
-    fn from_bytes(buf: &[u8]) -> io::Result<Self> {
+    fn from_bytes(buf: &[u8]) -> io::Result<(Self, usize)> {
         if buf.len() < 2 {
             return Err(io::Error::new(
                 std::io::ErrorKind::InvalidData,
@@ -145,7 +145,7 @@ impl FromBytes for BooleanType {
             ));
         }
         let value = buf[1] != 0;
-        Ok(Self { type_marker, value })
+        Ok((Self { type_marker, value }, 2))
     }
 }
 
@@ -250,14 +250,14 @@ impl ToBytes for ObjectEndType {
 }
 
 impl FromBytes for ObjectEndType {
-    fn from_bytes(buf: &[u8]) -> io::Result<Self> {
+    fn from_bytes(buf: &[u8]) -> io::Result<(Self, usize)> {
         if buf.len() < 3 {
             return Err(io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 "Buffer is too small, need at least 3 bytes",
             ));
         }
-        let empty = Utf8::from_bytes(&buf[0..2])?;
+        let (empty, _) = Utf8::from_bytes(&buf[0..2])?;
         let type_marker = TypeMarker::try_from(buf[2])
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         if type_marker != TypeMarker::ObjectEnd {
@@ -269,7 +269,7 @@ impl FromBytes for ObjectEndType {
                 ),
             ));
         }
-        Ok(Self { empty, type_marker })
+        Ok((Self { empty, type_marker }, 3))
     }
 }
 
@@ -278,7 +278,13 @@ pub const OBJECT_END: ObjectEndType = ObjectEndType {
     type_marker: TypeMarker::ObjectEnd,
 };
 
-#[derive(Debug)]
+//	The AMF 0 Object type is used to encoded anonymous ActionScript objects. Any typed
+//	object that does not have a registered class should be treated as an anonymous
+//	ActionScript object. If the same object instance appears in an object graph it should be
+//	sent by reference using an AMF 0.
+//	Use the reference type to reduce redundant information from being serialized and infinite
+//	loops from cyclical references.
+#[derive(Debug, PartialEq)]
 pub struct ObjectType<'a, T: AmfType> {
     type_marker: TypeMarker,
     properties: IndexMap<Utf8<'a>, T>,
@@ -353,5 +359,59 @@ impl<'a, T: AmfType> ToBytes for ObjectType<'a, T> {
         }
 
         Ok(offset)
+    }
+}
+
+impl<'a, T: AmfType> FromBytes for ObjectType<'a, T> {
+    fn from_bytes(buf: &[u8]) -> io::Result<(Self, usize)> {
+        if buf.len() < 1 + 3 {
+            // at least 1 byte for type marker and 3 bytes for object end
+            return Err(io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Buffer is too small, need at least 4 bytes",
+            ));
+        }
+
+        let type_marker = TypeMarker::try_from(buf[0])
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        if type_marker != TypeMarker::Object {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Invalid type marker, expected Object, got {:?}",
+                    type_marker
+                ),
+            ));
+        }
+
+        let mut properties = IndexMap::new();
+        let mut offset = 1;
+        loop {
+            if offset == buf.len() - 3 {
+                if buf[offset] == OBJECT_END.type_marker as u8 {
+                    break;
+                } else {
+                    return Err(io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        "Invalid object end marker",
+                    ));
+                }
+            }
+
+            let (k, k_len) = Utf8::from_bytes(&buf[offset..])?;
+            offset += k_len;
+            let (v, v_len) = T::from_bytes(&buf[offset..])?;
+            offset += v_len;
+            properties.insert(k, v);
+        }
+
+        Ok((
+            Self {
+                type_marker,
+                properties,
+                object_end: OBJECT_END,
+            },
+            offset + 3,
+        ))
     }
 }

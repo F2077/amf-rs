@@ -60,7 +60,7 @@ pub const EMPTY_UTF8_LONG: Utf8Long<'static> = AmfUtf8 {
     value: Cow::Borrowed(""),
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct AmfUtf8<'a, L: Length> {
     length: L,
     /// UTF-8 string value storage field
