@@ -200,12 +200,22 @@ where
     L: Length + TryInto<usize>,
 {
     // 在需要时可以创建一份拥有所有权的数据副本(提供了灵活性)
-    fn from_bytes(buf: &[u8]) -> Result<Self, io::Error> {
+    fn from_bytes(buf: &[u8]) -> Result<(Self, usize), io::Error> {
         let (length, val) = Self::parse(buf)?;
-        Ok(Self {
-            length,
-            value: Cow::Owned(val.to_string()),
-        })
+        let len = L::WIDTH
+            + length.try_into().map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Length conversion failed unexpectedly",
+                )
+            })?;
+        Ok((
+            Self {
+                length,
+                value: Cow::Owned(val.to_string()),
+            },
+            len,
+        ))
     }
 }
 
@@ -353,10 +363,12 @@ mod tests {
         let utf8 = AmfUtf8::new_owned(s.clone()).unwrap();
 
         let bytes = utf8.to_bytes().unwrap();
-        let parsed_utf8: AmfUtf8<u16> = AmfUtf8::from_bytes(&bytes).unwrap();
+        // 修改点：处理元组返回值
+        let (parsed_utf8, consumed) = AmfUtf8::<u16>::from_bytes(&bytes).unwrap();
 
         assert_eq!(utf8, parsed_utf8);
         assert_eq!(*parsed_utf8, s);
+        assert_eq!(consumed, bytes.len()); // 验证消耗的字节数
         assert!(matches!(parsed_utf8.value, Cow::Owned(_)));
     }
 
@@ -455,14 +467,15 @@ mod tests {
 
     #[test]
     fn test_u32_roundtrip_large_string() {
-        // 创建稍大于 u16::MAX 的字符串（65,536 字符）
         let s = "a".repeat(65_536);
         let utf8 = AmfUtf8::<u32>::new_owned(s.clone()).unwrap();
 
         let bytes = utf8.to_bytes().unwrap();
-        let parsed_utf8 = AmfUtf8::<u32>::from_bytes(&bytes).unwrap();
+        // 修改点：处理元组返回值
+        let (parsed_utf8, consumed) = AmfUtf8::<u32>::from_bytes(&bytes).unwrap();
 
         assert_eq!(*parsed_utf8, s);
+        assert_eq!(consumed, bytes.len()); // 验证消耗的字节数
     }
 
     #[test]
@@ -507,5 +520,20 @@ mod tests {
         assert_eq!(length, s.len() as u32);
         // 验证字符串内容
         assert_eq!(&buffer[4..], s.as_bytes());
+    }
+
+    #[test]
+    fn test_consumed_length() {
+        let s = "hello world";
+        let extra_data = [1, 2, 3, 4];
+
+        let utf8 = AmfUtf8::<u16>::new_borrowed(s).unwrap();
+        let mut data = utf8.to_bytes().unwrap();
+        data.extend_from_slice(&extra_data);
+
+        let (parsed, consumed) = AmfUtf8::<u16>::from_bytes(&data).unwrap();
+
+        assert_eq!(*parsed, s.to_string());
+        assert_eq!(consumed, data.len() - extra_data.len()); // 应只消耗字符串部分
     }
 }

@@ -6,7 +6,7 @@ pub trait ToBytes {
     fn write_bytes_to(&self, buf: &mut [u8]) -> io::Result<usize>;
 }
 pub trait FromBytes: Sized {
-    fn from_bytes(buf: &[u8]) -> io::Result<Self>;
+    fn from_bytes(buf: &[u8]) -> io::Result<(Self, usize)>;
 }
 
 pub trait FromBytesRef<'a>: Sized {
