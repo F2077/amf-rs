@@ -296,34 +296,38 @@ pub const OBJECT_END: ObjectEndType = ObjectEndType {
     type_marker: TypeMarker::ObjectEnd,
 };
 
-//	The AMF 0 Object type is used to encoded anonymous ActionScript objects. Any typed
-//	object that does not have a registered class should be treated as an anonymous
-//	ActionScript object. If the same object instance appears in an object graph it should be
-//	sent by reference using an AMF 0.
-//	Use the reference type to reduce redundant information from being serialized and infinite
-//	loops from cyclical references.
 #[derive(Debug, PartialEq)]
-pub struct ObjectType<'a, T: AmfType> {
-    type_marker: TypeMarker,
+pub struct NestedType<'a, T: AmfType, const M: u8, const W: usize> {
+    length: Option<u32>,
     properties: IndexMap<Utf8<'a>, T>,
     object_end: ObjectEndType,
 }
 
-impl<'a, T: AmfType> ObjectType<'a, T> {
+impl<'a, T: AmfType, const M: u8, const W: usize> NestedType<'a, T, M, W> {
     pub fn new(properties: IndexMap<Utf8<'a>, T>) -> Self {
+        let length = if W == 4 {
+            Some(properties.len() as u32)
+        } else {
+            None
+        };
         Self {
-            type_marker: TypeMarker::Object,
+            length,
             properties,
             object_end: OBJECT_END,
         }
     }
 }
 
-impl<'a, T: AmfType> ToBytes for ObjectType<'a, T> {
+impl<'a, T: AmfType, const M: u8, const W: usize> ToBytes for NestedType<'a, T, M, W> {
     fn to_bytes(&self) -> io::Result<Vec<u8>> {
-        debug_assert!(self.type_marker == TypeMarker::Object);
         let mut vec = Vec::with_capacity(self.bytes_size());
-        vec.push(self.type_marker as u8);
+        vec.push(M);
+
+        if let Some(length) = self.length {
+            let length_bytes = length.to_be_bytes();
+            vec.extend_from_slice(&length_bytes);
+        }
+
         self.properties
             .iter()
             .try_for_each(|(k, v)| -> io::Result<()> {
@@ -345,8 +349,8 @@ impl<'a, T: AmfType> ToBytes for ObjectType<'a, T> {
     }
 
     fn bytes_size(&self) -> usize {
-        let mut size = 0;
-        size += 1; // type marker length
+        let mut size = 1; // 1 byte for type marker
+        size += W;
         let properties_bytes_size: usize = self
             .properties
             .iter()
@@ -358,7 +362,6 @@ impl<'a, T: AmfType> ToBytes for ObjectType<'a, T> {
     }
 
     fn write_bytes_to(&self, buf: &mut [u8]) -> io::Result<usize> {
-        debug_assert!(self.type_marker == TypeMarker::Object);
         let required_size = self.bytes_size();
         if buf.len() < required_size {
             return Err(io::Error::new(
@@ -366,44 +369,53 @@ impl<'a, T: AmfType> ToBytes for ObjectType<'a, T> {
                 format!("Buffer is too small, need at least {} bytes", required_size),
             ));
         }
-
-        buf[0] = self.type_marker as u8;
-        let mut offset = 1;
+        buf[0] = M;
+        if let Some(length) = self.length {
+            let length_bytes = length.to_be_bytes();
+            buf[1..1 + W].copy_from_slice(&length_bytes);
+        }
+        let mut offset = 1 + W;
         for (k, v) in &self.properties {
             k.write_bytes_to(&mut buf[offset..offset + k.bytes_size()])?;
             offset += k.bytes_size();
             v.write_bytes_to(&mut buf[offset..offset + v.bytes_size()])?;
             offset += v.bytes_size();
         }
-
         Ok(offset)
     }
 }
 
-impl<'a, T: AmfType> FromBytes for ObjectType<'a, T> {
+impl<'a, T: AmfType, const M: u8, const W: usize> FromBytes for NestedType<'a, T, M, W> {
     fn from_bytes(buf: &[u8]) -> io::Result<(Self, usize)> {
-        if buf.len() < 1 + 3 {
-            // at least 1 byte for type marker and 3 bytes for object end
+        let required_size = 1 + W + 3;
+        if buf.len() < required_size {
+            // 1 byte for type marker, W bytes(maybe 0) for optional properties length,  3 bytes for object end
             return Err(io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                "Buffer is too small, need at least 4 bytes",
+                format!("Buffer is too small, need at least {} bytes", required_size),
             ));
         }
 
         let type_marker = TypeMarker::try_from(buf[0])
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-        if type_marker != TypeMarker::Object {
+        if buf[0] != M {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!(
-                    "Invalid type marker, expected Object, got {:?}",
-                    type_marker
-                ),
+                format!("Invalid type marker, expected {}, got {:?}", M, type_marker),
             ));
         }
 
+        let mut length = 0u32;
+        if W == 4 {
+            length = u32::from_be_bytes(
+                buf[1..1 + W]
+                    .try_into()
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?,
+            );
+        }
+
         let mut properties = IndexMap::new();
-        let mut offset = 1;
+        let mut offset = 1 + W;
         loop {
             if offset == buf.len() - 3 {
                 if buf[offset] == OBJECT_END.type_marker as u8 {
@@ -423,16 +435,34 @@ impl<'a, T: AmfType> FromBytes for ObjectType<'a, T> {
             properties.insert(k, v);
         }
 
-        Ok((
-            Self {
-                type_marker,
-                properties,
-                object_end: OBJECT_END,
-            },
-            offset + 3,
-        ))
+        if properties.len() != length as usize {
+            return Err(io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "Invalid properties length, expected {}, got {}",
+                    properties.len(),
+                    length
+                ),
+            ));
+        }
+
+        Ok((Self::new(properties), offset))
     }
 }
+
+//	The AMF 0 Object type is used to encoded anonymous ActionScript objects. Any typed
+//	object that does not have a registered class should be treated as an anonymous
+//	ActionScript object. If the same object instance appears in an object graph it should be
+//	sent by reference using an AMF 0.
+//	Use the reference type to reduce redundant information from being serialized and infinite
+//	loops from cyclical references.
+pub type ObjectType<'a, T: AmfType> = NestedType<'a, T, { TypeMarker::Object as u8 }, 0>;
+
+// An ECMA Array or 'associative' Array is used when an ActionScript Array contains non-ordinal indices.
+// This type is considered a complex type and thus reoccurring instancescan be sent by reference.
+// All indices. ordinal or otherwise, are treated as string keysinstead of integers.
+// For the purposes of serialization this type is very similar to ananonymous Obiect.
+pub type ECMAArrayType<'a, T: AmfType> = NestedType<'a, T, { TypeMarker::EcmaArray as u8 }, 4>;
 
 trait MarkerType: Sized {
     const TYPE_MARKER: TypeMarker;
