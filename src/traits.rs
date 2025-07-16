@@ -10,5 +10,5 @@ pub trait FromBytes: Sized {
 }
 
 pub trait FromBytesRef<'a>: Sized {
-    fn from_bytes_ref(buf: &'a [u8]) -> io::Result<Self>;
+    fn from_bytes_ref(buf: &'a [u8]) -> io::Result<(Self, usize)>;
 }

@@ -224,12 +224,22 @@ where
     L: Length + TryInto<usize>,
 {
     // 零拷贝反序列化，当输入 &[u8] 的生命周期足够长时，可以直接借用其数据，避免了不必要的内存分配(提供了性能)
-    fn from_bytes_ref(buf: &'a [u8]) -> Result<Self, io::Error> {
+    fn from_bytes_ref(buf: &'a [u8]) -> Result<(Self, usize), io::Error> {
         let (length, val) = Self::parse(buf)?;
-        Ok(Self {
-            length,
-            value: Cow::Borrowed(val),
-        })
+        let len = L::WIDTH
+            + length.try_into().map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "Length conversion failed unexpectedly",
+                )
+            })?;
+        Ok((
+            Self {
+                length,
+                value: Cow::Borrowed(val),
+            },
+            len,
+        ))
     }
 }
 
@@ -350,10 +360,11 @@ mod tests {
         let utf8 = AmfUtf8::new_borrowed(s).unwrap();
 
         let bytes = utf8.to_bytes().unwrap();
-        let parsed_utf8: AmfUtf8<u16> = AmfUtf8::from_bytes_ref(&bytes).unwrap();
+        let (parsed_utf8, consumed) = AmfUtf8::<u16>::from_bytes_ref(&bytes).unwrap();
 
         assert_eq!(utf8, parsed_utf8);
         assert_eq!(parsed_utf8.as_ref(), s);
+        assert_eq!(consumed, bytes.len()); // 验证消耗的字节数
         assert!(matches!(parsed_utf8.value, Cow::Borrowed(_)));
     }
 
@@ -363,7 +374,6 @@ mod tests {
         let utf8 = AmfUtf8::new_owned(s.clone()).unwrap();
 
         let bytes = utf8.to_bytes().unwrap();
-        // 修改点：处理元组返回值
         let (parsed_utf8, consumed) = AmfUtf8::<u16>::from_bytes(&bytes).unwrap();
 
         assert_eq!(utf8, parsed_utf8);
@@ -381,7 +391,7 @@ mod tests {
         let bytes_written = utf8.write_bytes_to(&mut buffer).unwrap();
         assert_eq!(bytes_written, buffer.len());
 
-        let parsed: AmfUtf8<u16> = AmfUtf8::from_bytes_ref(&buffer).unwrap();
+        let (parsed, _) = AmfUtf8::<u16>::from_bytes_ref(&buffer).unwrap();
         assert_eq!(parsed.as_ref(), s);
     }
 
@@ -399,26 +409,29 @@ mod tests {
     #[test]
     fn test_parse_insufficient_header() {
         let bytes = vec![0x00]; // Only 1 byte
-        let result: Result<AmfUtf8<u16>, io::Error> = AmfUtf8::from_bytes_ref(&bytes);
+        let result: Result<(AmfUtf8<u16>, usize), io::Error> = AmfUtf8::from_bytes_ref(&bytes);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::UnexpectedEof);
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof);
     }
 
     #[test]
     fn test_parse_insufficient_data() {
         let bytes = vec![0x00, 0x0A, b'h', b'e', b'l', b'l', b'o']; // Declares length 10, but provides 5
-        let result: Result<AmfUtf8<u16>, io::Error> = AmfUtf8::from_bytes_ref(&bytes);
+        let result: Result<(AmfUtf8<u16>, usize), io::Error> = AmfUtf8::from_bytes_ref(&bytes);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::UnexpectedEof);
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof);
     }
 
     #[test]
     fn test_parse_invalid_utf8() {
         // A byte slice with length prefix followed by invalid UTF-8 sequence
         let bytes = vec![0x00, 0x04, 0xff, 0xff, 0xff, 0xff];
-        let result: Result<AmfUtf8<u16>, io::Error> = AmfUtf8::from_bytes_ref(&bytes);
+        let result: Result<(AmfUtf8<u16>, usize), io::Error> = AmfUtf8::from_bytes_ref(&bytes);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::InvalidData);
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
     }
 
     #[test]
@@ -428,8 +441,9 @@ mod tests {
         assert_eq!(utf8.length, 0);
         let bytes = utf8.to_bytes().unwrap();
         assert_eq!(bytes, vec![0x00, 0x00]);
-        let parsed: AmfUtf8<u16> = AmfUtf8::from_bytes_ref(&bytes).unwrap();
+        let (parsed, consumed) = AmfUtf8::<u16>::from_bytes_ref(&bytes).unwrap();
         assert_eq!(parsed.as_ref(), "");
+        assert_eq!(consumed, 2); // 验证消耗的字节数
     }
 
     #[test]
@@ -471,7 +485,6 @@ mod tests {
         let utf8 = AmfUtf8::<u32>::new_owned(s.clone()).unwrap();
 
         let bytes = utf8.to_bytes().unwrap();
-        // 修改点：处理元组返回值
         let (parsed_utf8, consumed) = AmfUtf8::<u32>::from_bytes(&bytes).unwrap();
 
         assert_eq!(*parsed_utf8, s);
@@ -480,19 +493,15 @@ mod tests {
 
     #[test]
     fn test_u32_insufficient_data() {
-        // 声明长度 100_000 但实际数据不足
-        let mut bytes = vec![0; 4];
-        // 写入长度 100,000 (0x000186A0)
-        bytes[0] = 0x00;
-        bytes[1] = 0x01;
-        bytes[2] = 0x86;
-        bytes[3] = 0xA0;
+        // 声明长度 100_000 (0x000186A0)
+        let mut bytes = vec![0x00, 0x01, 0x86, 0xA0];
         // 只添加少量数据
         bytes.extend_from_slice(b"insufficient");
 
-        let result: Result<AmfUtf8<u32>, io::Error> = AmfUtf8::from_bytes_ref(&bytes);
+        let result: Result<(AmfUtf8<u32>, usize), io::Error> = AmfUtf8::from_bytes_ref(&bytes);
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err().kind(), io::ErrorKind::UnexpectedEof);
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof);
     }
 
     #[test]
@@ -535,5 +544,22 @@ mod tests {
 
         assert_eq!(*parsed, s.to_string());
         assert_eq!(consumed, data.len() - extra_data.len()); // 应只消耗字符串部分
+    }
+
+    #[test]
+    fn test_consumed_length_ref() {
+        let s = "hello world";
+        let extra_data = [1, 2, 3, 4];
+
+        let utf8 = AmfUtf8::<u16>::new_borrowed(s).unwrap();
+        let mut data = utf8.to_bytes().unwrap();
+        data.extend_from_slice(&extra_data);
+
+        // 使用from_bytes_ref
+        let (parsed, consumed) = AmfUtf8::<u16>::from_bytes_ref(&data).unwrap();
+
+        assert_eq!(*parsed, s.to_string());
+        assert_eq!(consumed, data.len() - extra_data.len()); // 应只消耗字符串部分
+        assert!(matches!(parsed.value, Cow::Borrowed(_))); // 验证借用
     }
 }
