@@ -415,3 +415,63 @@ impl<'a, T: AmfType> FromBytes for ObjectType<'a, T> {
         ))
     }
 }
+
+//	The null type is represented by the null type marker. No further information is encoded
+//	for this value.
+#[derive(Debug, PartialEq)]
+pub struct NullType {
+    type_marker: TypeMarker,
+}
+
+impl NullType {
+    pub fn new() -> Self {
+        Self {
+            type_marker: TypeMarker::Null,
+        }
+    }
+}
+
+impl ToBytes for NullType {
+    fn to_bytes(&self) -> io::Result<Vec<u8>> {
+        debug_assert!(self.type_marker == TypeMarker::Null);
+        let mut vec = Vec::with_capacity(self.bytes_size());
+        vec.push(self.type_marker as u8);
+        Ok(vec)
+    }
+
+    fn bytes_size(&self) -> usize {
+        1
+    }
+
+    fn write_bytes_to(&self, buf: &mut [u8]) -> io::Result<usize> {
+        debug_assert!(self.type_marker == TypeMarker::Null);
+        if buf.len() < 1 {
+            return Err(io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Buffer is too small, need at least 1 byte",
+            ));
+        }
+        buf[0] = self.type_marker as u8;
+        Ok(1)
+    }
+}
+
+impl FromBytes for NullType {
+    fn from_bytes(buf: &[u8]) -> io::Result<(Self, usize)> {
+        if buf.len() < 1 {
+            return Err(io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Buffer is too small, need at least 1 byte",
+            ));
+        }
+        let type_marker = TypeMarker::try_from(buf[0])
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        if type_marker != TypeMarker::Null {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Invalid type marker, expected Null, got {:?}", type_marker),
+            ));
+        }
+        Ok((Self { type_marker }, 1))
+    }
+}
