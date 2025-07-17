@@ -3,10 +3,14 @@ use crate::type_marker::TypeMarker;
 use crate::utf8;
 use crate::utf8::{AmfUtf8, Length, Utf8};
 use indexmap::IndexMap;
-use std::fmt::Debug;
+use std::borrow::Borrow;
+use std::fmt::{Debug, Display, Formatter};
 use std::io;
+use std::ops::Deref;
 
 pub trait AmfType: ToBytes + FromBytes {}
+
+impl<T> AmfType for T where T: ToBytes + FromBytes + Display {}
 
 // An AMF 0 Number type is used to encode an ActionScript Number.
 // The data following a Number type marker is always an 8 byte IEEE-754 double precision floating point value in network byte order (sign bit in low memory).
@@ -75,6 +79,40 @@ impl FromBytes for NumberType {
         }
         let value = f64::from_be_bytes(buf[1..9].try_into().unwrap());
         Ok((Self { type_marker, value }, 9))
+    }
+}
+
+impl Deref for NumberType {
+    type Target = f64;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+impl AsRef<f64> for NumberType {
+    fn as_ref(&self) -> &f64 {
+        &self.value
+    }
+}
+
+impl Borrow<f64> for NumberType {
+    fn borrow(&self) -> &f64 {
+        &self.value
+    }
+}
+
+impl Display for NumberType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
+impl TryFrom<f64> for NumberType {
+    type Error = io::Error;
+
+    fn try_from(value: f64) -> Result<Self, Self::Error> {
+        Ok(NumberType::new(value))
     }
 }
 
@@ -150,6 +188,40 @@ impl FromBytes for BooleanType {
     }
 }
 
+impl Deref for BooleanType {
+    type Target = bool;
+
+    fn deref(&self) -> &Self::Target {
+        &self.value
+    }
+}
+
+impl AsRef<bool> for BooleanType {
+    fn as_ref(&self) -> &bool {
+        &self.value
+    }
+}
+
+impl Borrow<bool> for BooleanType {
+    fn borrow(&self) -> &bool {
+        &self.value
+    }
+}
+
+impl Display for BooleanType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
+impl TryFrom<bool> for BooleanType {
+    type Error = io::Error;
+
+    fn try_from(value: bool) -> Result<Self, Self::Error> {
+        Ok(BooleanType::new(value))
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct AmfUtf8ValuedType<'a, L: Length, const M: u8> {
     inner: AmfUtf8<'a, L>,
@@ -165,7 +237,8 @@ impl<'a, L: Length + TryInto<usize>, const M: u8> ToBytes for AmfUtf8ValuedType<
     fn to_bytes(&self) -> io::Result<Vec<u8>> {
         let mut vec = Vec::with_capacity(self.bytes_size());
         vec.push(M);
-        let _ = self.inner.write_bytes_to(&mut vec[1..])?;
+        let inner_vec = self.inner.to_bytes()?;
+        vec.extend_from_slice(inner_vec.as_slice());
         Ok(vec)
     }
 
@@ -213,6 +286,46 @@ impl<'a, L: Length + TryInto<usize>, const M: u8> FromBytes for AmfUtf8ValuedTyp
     }
 }
 
+impl<'a, L: Length + TryInto<usize>, const M: u8> Deref for AmfUtf8ValuedType<'a, L, M> {
+    type Target = AmfUtf8<'a, L>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<'a, L: Length + TryInto<usize>, const M: u8> AsRef<AmfUtf8<'a, L>>
+    for AmfUtf8ValuedType<'a, L, M>
+{
+    fn as_ref(&self) -> &AmfUtf8<'a, L> {
+        &self.inner
+    }
+}
+
+impl<'a, L: Length + TryInto<usize>, const M: u8> Borrow<AmfUtf8<'a, L>>
+    for AmfUtf8ValuedType<'a, L, M>
+{
+    fn borrow(&self) -> &AmfUtf8<'a, L> {
+        &self.inner
+    }
+}
+
+impl<'a, L: Length + TryInto<usize>, const M: u8> Display for AmfUtf8ValuedType<'a, L, M> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.inner)
+    }
+}
+
+impl<'a, L: Length + TryInto<usize>, const M: u8> TryFrom<AmfUtf8<'a, L>>
+    for AmfUtf8ValuedType<'a, L, M>
+{
+    type Error = io::Error;
+
+    fn try_from(value: AmfUtf8<'a, L>) -> Result<Self, Self::Error> {
+        Ok(Self::new(value))
+    }
+}
+
 //	All strings in AMF are encoded using UTF-8; however, the byte-length header format
 //	may vary. The AMF 0 String type uses the standard byte-length header (i.e. U16). For
 //	long Strings that require more than 65535 bytes to encode in UTF-8, the AMF 0 Long
@@ -243,7 +356,7 @@ impl ToBytes for ObjectEndType {
     fn to_bytes(&self) -> io::Result<Vec<u8>> {
         debug_assert!(self.type_marker == TypeMarker::ObjectEnd);
         let mut vec = Vec::with_capacity(self.bytes_size());
-        let _ = self.empty.write_bytes_to(&mut vec[0..2])?;
+        vec.extend_from_slice(&self.empty.to_bytes()?);
         vec.push(self.type_marker as u8);
         Ok(vec)
     }
@@ -288,6 +401,47 @@ impl FromBytes for ObjectEndType {
             ));
         }
         Ok((Self { empty, type_marker }, 3))
+    }
+}
+
+impl Deref for ObjectEndType {
+    type Target = Utf8<'static>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.empty
+    }
+}
+
+impl AsRef<Utf8<'static>> for ObjectEndType {
+    fn as_ref(&self) -> &Utf8<'static> {
+        &self.empty
+    }
+}
+
+impl Borrow<Utf8<'static>> for ObjectEndType {
+    fn borrow(&self) -> &Utf8<'static> {
+        &self.empty
+    }
+}
+
+impl Display for ObjectEndType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.empty)
+    }
+}
+
+impl TryFrom<Utf8<'static>> for ObjectEndType {
+    type Error = io::Error;
+
+    fn try_from(value: Utf8<'static>) -> Result<Self, Self::Error> {
+        if value == utf8::EMPTY_UTF8 {
+            Ok(Self::new())
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Invalid ObjectEndType",
+            ))
+        }
     }
 }
 
@@ -450,6 +604,44 @@ impl<'a, T: AmfType, const M: u8, const W: usize> FromBytes for NestedType<'a, T
     }
 }
 
+impl<'a, T: AmfType, const M: u8, const W: usize> Deref for NestedType<'a, T, M, W> {
+    type Target = IndexMap<Utf8<'a>, T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.properties
+    }
+}
+
+impl<'a, T: AmfType, const M: u8, const W: usize> AsRef<IndexMap<Utf8<'a>, T>>
+    for NestedType<'a, T, M, W>
+{
+    fn as_ref(&self) -> &IndexMap<Utf8<'a>, T> {
+        &self.properties
+    }
+}
+
+impl<'a, T: AmfType, const M: u8, const W: usize> Display for NestedType<'a, T, M, W> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{")?; // 写入开头的 "{"
+
+        // 使用 peeking iterator 来优雅地处理逗号
+        let mut iter = self.properties.iter().peekable();
+
+        while let Some((key, value)) = iter.next() {
+            // 写入 "key": value
+            // 注意 key 和 value 会自动使用它们自己的 Display 实现
+            write!(f, "\"{}\": {}", key, value)?;
+
+            // 如果这不是最后一个元素，就写入一个逗号和空格
+            if iter.peek().is_some() {
+                write!(f, ", ")?;
+            }
+        }
+
+        write!(f, "}}") // 写入结尾的 "}"
+    }
+}
+
 //	The AMF 0 Object type is used to encoded anonymous ActionScript objects. Any typed
 //	object that does not have a registered class should be treated as an anonymous
 //	ActionScript object. If the same object instance appears in an object graph it should be
@@ -524,6 +716,12 @@ impl MarkerType for NullType {
     const TYPE_MARKER: TypeMarker = TypeMarker::Null;
 }
 
+impl Display for NullType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "null")
+    }
+}
+
 //    The undefined type is represented by the undefined type marker. No further information is encoded
 //    for this value.
 #[derive(Debug, PartialEq, Default)]
@@ -531,6 +729,12 @@ pub struct UndefinedType;
 
 impl MarkerType for UndefinedType {
     const TYPE_MARKER: TypeMarker = TypeMarker::Undefined;
+}
+
+impl Display for UndefinedType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "undefined")
+    }
 }
 
 pub struct DoNotSupportType {}

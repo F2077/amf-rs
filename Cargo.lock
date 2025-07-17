@@ -15,8 +15,8 @@ dependencies = [
 name = "amf-rs"
 version = "0.1.0"
 dependencies = [
- "bitio-rs",
  "criterion",
+    "derive_more",
  "indexmap",
  "itertools",
  "paste",
@@ -39,12 +39,6 @@ name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
-
-[[package]]
-name = "bitio-rs"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b606b40a14efcc051e4e9873398bfd5c877b76440eaab13c9e31808434ba49b"
 
 [[package]]
 name = "bumpalo"
@@ -182,6 +176,26 @@ name = "crunchy"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
+
+[[package]]
+name = "derive_more"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "093242cf7570c207c83073cf82f79706fe7b8317e98620a47d5be7c3d8497678"
+dependencies = [
+    "derive_more-impl",
+]
+
+[[package]]
+name = "derive_more-impl"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bda628edc44c4bb645fbe0f758797143e4e07926f7ebf4e9bdfbd3d2ce621df3"
+dependencies = [
+    "proc-macro2",
+    "quote",
+    "syn",
+]
 
 [[package]]
 name = "either"

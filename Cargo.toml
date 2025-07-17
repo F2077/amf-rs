@@ -9,7 +9,7 @@ repository = "https://github.com/F2077/amf-rs"
 
 [dependencies]
 indexmap = "2.10.0"
-bitio-rs = "0.1.2"
+derive_more = "2.0.1"
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
