@@ -532,3 +532,42 @@ pub struct UndefinedType;
 impl MarkerType for UndefinedType {
     const TYPE_MARKER: TypeMarker = TypeMarker::Undefined;
 }
+
+pub struct DoNotSupportType {}
+
+impl ToBytes for DoNotSupportType {
+    fn to_bytes(&self) -> io::Result<Vec<u8>> {
+        panic!("Do not support")
+    }
+
+    fn bytes_size(&self) -> usize {
+        panic!("Do not support")
+    }
+
+    fn write_bytes_to(&self, buf: &mut [u8]) -> io::Result<usize> {
+        panic!("Do not support")
+    }
+}
+
+impl FromBytes for DoNotSupportType {
+    fn from_bytes(buf: &[u8]) -> io::Result<(Self, usize)> {
+        panic!("Do not support")
+    }
+}
+
+//	If a type cannot be serialized a special unsupported marker can be used in place of the
+//	type. Some endpoints may throw an error on encountering this type marker. No further
+//	information is encoded for this type.
+pub type UnsupportedType = DoNotSupportType;
+
+//	This type is not supported and is reserved for future use.
+pub type MovieClipType = DoNotSupportType;
+
+//	This type is not supported and is reserved for future use.
+pub type RecordSetType = DoNotSupportType;
+
+pub type ReferenceType = DoNotSupportType;
+pub type StrictArrayType = DoNotSupportType;
+pub type DateType = DoNotSupportType;
+pub type XMLDocumentType = DoNotSupportType;
+pub type TypedObjectType = DoNotSupportType;
