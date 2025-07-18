@@ -1,9 +1,9 @@
 mod boolean;
-mod end;
 mod ignored;
 mod marker;
 mod nested;
 pub mod number;
+mod object_end;
 mod string;
 mod traits;
 mod type_marker;

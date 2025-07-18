@@ -131,6 +131,10 @@ impl<const LENGTH_BYTE_WIDTH: usize> Display for AmfUtf8<LENGTH_BYTE_WIDTH> {
 pub type Utf8 = AmfUtf8<2>;
 pub type Utf8Long = AmfUtf8<4>;
 
+// 常量
+pub const EMPTY_UTF8: Utf8 = Utf8::new("").unwrap();
+pub const EMPTY_UTF8_LONG: Utf8Long = Utf8Long::new("").unwrap();
+
 #[cfg(test)]
 mod tests {
     use super::*;
