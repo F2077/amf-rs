@@ -1,5 +1,6 @@
-use crate::traits::{TryFromBytes, TryIntoBytes};
+use crate::traits::{Marshall, Unmarshall};
 
-pub trait Amf0Type: TryIntoBytes + TryFromBytes {}
+pub(crate) trait Amf0Type: Marshall + Unmarshall {}
 
-impl<T> Amf0Type for T where T: TryIntoBytes + TryFromBytes {}
+// blanket implementation
+impl<T> Amf0Type for T where T: Marshall + Unmarshall {}

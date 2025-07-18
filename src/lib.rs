@@ -1,4 +1,3 @@
 pub mod amf0;
-pub mod traits;
-pub mod type_marker;
-pub mod utf8;
+pub mod errors;
+pub(crate) mod traits;

@@ -1,3 +1,4 @@
+use crate::errors::AmfError;
 use std::fmt;
 use std::fmt::Display;
 
@@ -29,8 +30,32 @@ impl Display for TypeMarker {
     }
 }
 
-impl From<TypeMarker> for u8 {
-    fn from(marker: TypeMarker) -> Self {
-        marker as u8
+impl TryFrom<u8> for TypeMarker {
+    type Error = AmfError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x00 => Ok(TypeMarker::Number),
+            0x01 => Ok(TypeMarker::Boolean),
+            0x02 => Ok(TypeMarker::String),
+            0x03 => Ok(TypeMarker::Object),
+            0x04 => Ok(TypeMarker::MovieClip),
+            0x05 => Ok(TypeMarker::Null),
+            0x06 => Ok(TypeMarker::Undefined),
+            0x07 => Ok(TypeMarker::Reference),
+            0x08 => Ok(TypeMarker::EcmaArray),
+            0x09 => Ok(TypeMarker::ObjectEnd),
+            0x0A => Ok(TypeMarker::StrictArray),
+            0x0B => Ok(TypeMarker::Date),
+            0x0C => Ok(TypeMarker::LongString),
+            0x0D => Ok(TypeMarker::Unsupported),
+            0x0E => Ok(TypeMarker::Recordset),
+            0x0F => Ok(TypeMarker::XmlDocument),
+            0x10 => Ok(TypeMarker::TypedObject),
+            v => Err(AmfError::Custom(format!(
+                "invalid type marker value: {:?}",
+                v
+            ))),
+        }
     }
 }

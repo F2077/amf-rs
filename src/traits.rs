@@ -1,11 +1,13 @@
 use crate::errors::AmfError;
 
-pub trait TryIntoBytes {
-    fn try_into_bytes(&self) -> Result<&[u8], AmfError>;
+pub(crate) trait Marshall {
+    fn marshall(&self) -> Result<&[u8], AmfError>;
 }
-pub trait TryFromBytes: Sized {
-    fn try_from_bytes(buf: &[u8]) -> Result<(Self, usize), AmfError>;
+
+pub(crate) trait MarshallLength {
+    fn marshall_length(&self) -> usize;
 }
-pub trait Length {
-    fn length(&self) -> usize;
+
+pub(crate) trait Unmarshall: Sized {
+    fn unmarshall(buf: &[u8]) -> Result<(Self, usize), AmfError>;
 }

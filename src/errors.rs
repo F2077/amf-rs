@@ -4,8 +4,9 @@ use std::io;
 
 #[derive(Debug)]
 pub enum AmfError {
-    BufferTooSmall { expected: usize, got: usize },
+    BufferTooSmall { want: usize, got: usize },
     StringTooLong { max: usize, got: usize },
+    TypeMarkerValueMismatch { want: u8, got: u8 },
     Custom(String),
     Io(io::Error),
 }
@@ -13,15 +14,14 @@ pub enum AmfError {
 impl Display for AmfError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            AmfError::BufferTooSmall { expected, got } => {
-                write!(
-                    f,
-                    "buffer too small: expected {} bytes, got {}",
-                    expected, got
-                )
+            AmfError::BufferTooSmall { want, got } => {
+                write!(f, "buffer too small: want {} bytes, got {}", want, got)
             }
             AmfError::StringTooLong { max, got } => {
                 write!(f, "string too long: max {}, got {}", max, got)
+            }
+            AmfError::TypeMarkerValueMismatch { want, got } => {
+                write!(f, "type marker value mismatch: want {}, got {}", want, got)
             }
             AmfError::Custom(msg) => {
                 write!(f, "{}", msg)
