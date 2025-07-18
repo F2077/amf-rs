@@ -1,14 +1,12 @@
-use std::io;
+use crate::errors::AmfError;
+
+pub trait Length {
+    fn length(&self) -> usize;
+}
 
 pub trait ToBytes {
-    fn to_bytes(&self) -> io::Result<Vec<u8>>;
-    fn bytes_size(&self) -> usize;
-    fn write_bytes_to(&self, buf: &mut [u8]) -> io::Result<usize>;
+    fn to_bytes(&self) -> Result<Vec<u8>, AmfError>;
 }
 pub trait FromBytes: Sized {
-    fn from_bytes(buf: &[u8]) -> io::Result<(Self, usize)>;
-}
-
-pub trait FromBytesRef<'a>: Sized {
-    fn from_bytes_ref(buf: &'a [u8]) -> io::Result<(Self, usize)>;
+    fn from_bytes(buf: &[u8]) -> Result<(Self, usize), AmfError>;
 }
