@@ -221,6 +221,31 @@ impl<
     }
 }
 
+impl<
+    T: Marshall + MarshallLength + Unmarshall + Display,
+    const LENGTH_BYTE_WIDTH: usize,
+    const TYPE_MARKER: u8,
+> Default for NestedType<T, LENGTH_BYTE_WIDTH, TYPE_MARKER>
+{
+    fn default() -> Self {
+        Self::new(IndexMap::new())
+    }
+}
+
+impl<
+    T: Marshall + MarshallLength + Unmarshall + Display,
+    const LENGTH_BYTE_WIDTH: usize,
+    const TYPE_MARKER: u8,
+> IntoIterator for NestedType<T, LENGTH_BYTE_WIDTH, TYPE_MARKER>
+{
+    type Item = (Utf8, T);
+    type IntoIter = indexmap::map::IntoIter<Utf8, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.properties.into_iter()
+    }
+}
+
 //	The AMF 0 Object type is used to encoded anonymous ActionScript objects. Any typed
 //	object that does not have a registered class should be treated as an anonymous
 //	ActionScript object. If the same object instance appears in an object graph it should be

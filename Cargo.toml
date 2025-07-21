@@ -19,7 +19,7 @@ paste = "1.0"
 default = []
 bench = []  # 显式声明 bench 特性
 
-[[bench]]
-name = "utf8_benchmark"
-harness = false
+#[[bench]]
+#name = "utf8_benchmark"
+#harness = false
 
