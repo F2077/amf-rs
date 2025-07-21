@@ -53,7 +53,7 @@ impl TryFrom<u8> for TypeMarker {
             0x0F => Ok(TypeMarker::XmlDocument),
             0x10 => Ok(TypeMarker::TypedObject),
             v => Err(AmfError::Custom(format!(
-                "invalid type marker value: {:?}",
+                "Invalid type marker value: {:?}",
                 v
             ))),
         }

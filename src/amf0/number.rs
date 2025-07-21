@@ -23,12 +23,12 @@ impl NumberType {
 }
 
 impl Marshall for NumberType {
-    fn marshall(&self) -> Result<&[u8], AmfError> {
+    fn marshall(&self) -> Result<Vec<u8>, AmfError> {
         debug_assert!(self.type_marker == TypeMarker::Number);
         let mut buf = [0u8; 9];
         buf[0] = self.type_marker as u8;
         buf[1..9].copy_from_slice(&self.value.to_be_bytes());
-        Ok(&buf)
+        Ok(buf.to_vec())
     }
 }
 
@@ -82,13 +82,13 @@ impl Deref for NumberType {
     type Target = f64;
 
     fn deref(&self) -> &Self::Target {
-        Self.as_ref()
+        self.as_ref()
     }
 }
 
 impl Borrow<f64> for NumberType {
     fn borrow(&self) -> &f64 {
-        Self.as_ref()
+        self.as_ref()
     }
 }
 

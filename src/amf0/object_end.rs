@@ -1,8 +1,7 @@
 use crate::amf0::type_marker::TypeMarker;
-use crate::amf0::utf8::{EMPTY_UTF8, Utf8};
+use crate::amf0::utf8::Utf8;
 use crate::errors::AmfError;
 use crate::traits::{Marshall, MarshallLength, Unmarshall};
-use std::borrow::Borrow;
 use std::fmt::{Display, Formatter};
 
 //	The object-end-marker is used in a special type that signals the end of a set of object
@@ -18,19 +17,19 @@ pub struct ObjectEndType {
 impl ObjectEndType {
     pub fn new() -> Self {
         Self {
-            empty: EMPTY_UTF8,
+            empty: Utf8::default(),
             type_marker: TypeMarker::ObjectEnd,
         }
     }
 }
 
 impl Marshall for ObjectEndType {
-    fn marshall(&self) -> Result<&[u8], AmfError> {
+    fn marshall(&self) -> Result<Vec<u8>, AmfError> {
         debug_assert!(self.type_marker == TypeMarker::ObjectEnd);
         let mut buf = [0u8; 3];
         buf.copy_from_slice(&self.empty.marshall()?);
         buf[2] = self.type_marker as u8;
-        Ok(buf.as_ref())
+        Ok(buf.to_vec())
     }
 }
 
@@ -74,4 +73,8 @@ impl Display for ObjectEndType {
     }
 }
 
-pub const OBJECT_END: ObjectEndType = ObjectEndType::new();
+impl Default for ObjectEndType {
+    fn default() -> Self {
+        Self::new()
+    }
+}

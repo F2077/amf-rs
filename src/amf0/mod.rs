@@ -1,10 +1,9 @@
-mod boolean;
-mod ignored;
-mod marker;
-mod nested;
+pub mod boolean;
+pub mod marker;
+pub mod nested;
 pub mod number;
-mod object_end;
-mod string;
-mod traits;
-mod type_marker;
-mod utf8;
+pub mod object_end;
+pub mod string;
+pub mod type_marker;
+pub mod unsupported;
+pub mod utf8;

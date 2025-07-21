@@ -1,7 +1,7 @@
 use crate::errors::AmfError;
 
 pub(crate) trait Marshall {
-    fn marshall(&self) -> Result<&[u8], AmfError>;
+    fn marshall(&self) -> Result<Vec<u8>, AmfError>;
 }
 
 pub(crate) trait MarshallLength {

@@ -26,12 +26,12 @@ impl BooleanType {
 }
 
 impl Marshall for BooleanType {
-    fn marshall(&self) -> Result<&[u8], AmfError> {
+    fn marshall(&self) -> Result<Vec<u8>, AmfError> {
         debug_assert!(self.type_marker == TypeMarker::Boolean);
         let mut buf = [0u8; 2];
         buf[0] = self.type_marker as u8; // 单字节情况下不用考虑字节序
         buf[1] = self.value as u8;
-        Ok(&buf)
+        Ok(buf.to_vec())
     }
 }
 
@@ -85,7 +85,7 @@ impl Deref for BooleanType {
     type Target = bool;
 
     fn deref(&self) -> &bool {
-        Self.as_ref()
+        self.as_ref()
     }
 }
 

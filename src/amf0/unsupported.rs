@@ -7,7 +7,7 @@ use crate::traits::{Marshall, MarshallLength, Unmarshall};
 pub struct UnsupportedType {}
 
 impl Marshall for UnsupportedType {
-    fn marshall(&self) -> Result<&[u8], AmfError> {
+    fn marshall(&self) -> Result<Vec<u8>, AmfError> {
         panic!("unsupported")
     }
 }

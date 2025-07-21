@@ -28,17 +28,18 @@ impl<const LENGTH_BYTE_WIDTH: usize> AmfUtf8<LENGTH_BYTE_WIDTH> {
 }
 
 impl<const LENGTH_BYTE_WIDTH: usize> Marshall for AmfUtf8<LENGTH_BYTE_WIDTH> {
-    fn marshall(&self) -> Result<&[u8], AmfError> {
+    fn marshall(&self) -> Result<Vec<u8>, AmfError> {
         debug_assert!(LENGTH_BYTE_WIDTH == 2 || LENGTH_BYTE_WIDTH == 4);
         let mut vec = Vec::with_capacity(self.marshall_length());
-        let length_buf = if LENGTH_BYTE_WIDTH == 2 {
-            (self.inner.len() as u16).to_be_bytes()
+        if LENGTH_BYTE_WIDTH == 2 {
+            vec.extend_from_slice((self.inner.len() as u16).to_be_bytes().as_slice())
+        } else if LENGTH_BYTE_WIDTH == 4 {
+            vec.extend_from_slice((self.inner.len() as u32).to_be_bytes().as_slice())
         } else {
-            (self.inner.len() as u32).to_be_bytes()
-        };
-        vec.extend_from_slice(&length_buf);
+            return Err(AmfError::Custom("Invalid length byte width".to_string()));
+        }
         vec.extend_from_slice(self.inner.as_bytes());
-        Ok(vec.as_slice())
+        Ok(vec)
     }
 }
 
@@ -52,21 +53,26 @@ impl<const LENGTH_BYTE_WIDTH: usize> MarshallLength for AmfUtf8<LENGTH_BYTE_WIDT
 impl<const LENGTH_BYTE_WIDTH: usize> Unmarshall for AmfUtf8<LENGTH_BYTE_WIDTH> {
     fn unmarshall(buf: &[u8]) -> Result<(Self, usize), AmfError> {
         debug_assert!(LENGTH_BYTE_WIDTH == 2 || LENGTH_BYTE_WIDTH == 4);
-        let length = if LENGTH_BYTE_WIDTH == 2 {
-            u16::from_be_bytes(
-                buf[0..2]
-                    .iter()
-                    .try_into()?
-                    .map_err(|_| AmfError::Custom("failed to parse length (u16) from buf")),
-            )
+        let mut length = 0usize;
+        if LENGTH_BYTE_WIDTH == 2 {
+            if buf.len() < 2 {
+                return Err(AmfError::BufferTooSmall {
+                    want: 2,
+                    got: buf.len(),
+                });
+            }
+            length = u16::from_be_bytes(buf[0..2].try_into().unwrap()) as usize;
+        } else if LENGTH_BYTE_WIDTH == 4 {
+            if buf.len() < 4 {
+                return Err(AmfError::BufferTooSmall {
+                    want: 4,
+                    got: buf.len(),
+                });
+            }
+            length = u32::from_be_bytes(buf[0..4].try_into().unwrap()) as usize;
         } else {
-            u32::from_be_bytes(
-                buf[0..4]
-                    .iter()
-                    .try_into()?
-                    .map_err(|_| AmfError::Custom("failed to parse length (u32) from buf")),
-            )
-        };
+            return Err(AmfError::Custom("Invalid length byte width".to_string()));
+        }
 
         let start = LENGTH_BYTE_WIDTH;
         let end = start + length;
@@ -76,7 +82,7 @@ impl<const LENGTH_BYTE_WIDTH: usize> Unmarshall for AmfUtf8<LENGTH_BYTE_WIDTH> {
                 got: buf.len(),
             });
         }
-        let value = std::str::from_utf8(&buf[start..end]).map_err(|e| AmfError::Io(e))?;
+        let value = std::str::from_utf8(&buf[start..end]).map_err(|e| AmfError::InvalidUtf8(e))?;
         Ok((
             Self {
                 inner: value.to_string(),
@@ -126,14 +132,16 @@ impl<const LENGTH_BYTE_WIDTH: usize> Display for AmfUtf8<LENGTH_BYTE_WIDTH> {
     }
 }
 
+impl<const LENGTH_BYTE_WIDTH: usize> Default for AmfUtf8<LENGTH_BYTE_WIDTH> {
+    fn default() -> Self {
+        Self::new("").unwrap()
+    }
+}
+
 // 类型别名
 
 pub type Utf8 = AmfUtf8<2>;
 pub type Utf8Long = AmfUtf8<4>;
-
-// 常量
-pub const EMPTY_UTF8: Utf8 = Utf8::new("").unwrap();
-pub const EMPTY_UTF8_LONG: Utf8Long = Utf8Long::new("").unwrap();
 
 #[cfg(test)]
 mod tests {
