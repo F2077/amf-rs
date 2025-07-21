@@ -9,7 +9,7 @@ use std::fmt::Display;
 use std::io;
 use std::ops::Deref;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NestedType<
     T: Marshall + MarshallLength + Unmarshall,
     const LENGTH_BYTE_WIDTH: usize,
@@ -176,6 +176,39 @@ impl<
     T: Marshall + MarshallLength + Unmarshall,
     const LENGTH_BYTE_WIDTH: usize,
     const TYPE_MARKER: u8,
+> TryFrom<&[u8]> for NestedType<T, LENGTH_BYTE_WIDTH, TYPE_MARKER>
+{
+    type Error = AmfError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        Self::unmarshall(value).map(|(v, _)| v)
+    }
+}
+
+impl<
+    K,
+    V,
+    T: Marshall + MarshallLength + Unmarshall,
+    const LENGTH_BYTE_WIDTH: usize,
+    const TYPE_MARKER: u8,
+> From<IndexMap<K, V>> for NestedType<T, LENGTH_BYTE_WIDTH, TYPE_MARKER>
+where
+    K: Into<Utf8>,
+    V: Into<T>,
+{
+    fn from(value: IndexMap<K, V>) -> Self {
+        let properties = value
+            .into_iter()
+            .map(|(k, v)| (k.into(), v.into()))
+            .collect();
+        Self::new(properties)
+    }
+}
+
+impl<
+    T: Marshall + MarshallLength + Unmarshall,
+    const LENGTH_BYTE_WIDTH: usize,
+    const TYPE_MARKER: u8,
 > AsRef<IndexMap<Utf8, T>> for NestedType<T, LENGTH_BYTE_WIDTH, TYPE_MARKER>
 {
     fn as_ref(&self) -> &IndexMap<Utf8, T> {
@@ -238,6 +271,26 @@ impl<
 {
     fn default() -> Self {
         Self::new(IndexMap::new())
+    }
+}
+
+impl<
+    K,
+    V,
+    T: Marshall + MarshallLength + Unmarshall + Display,
+    const LENGTH_BYTE_WIDTH: usize,
+    const TYPE_MARKER: u8,
+> FromIterator<(K, V)> for NestedType<T, LENGTH_BYTE_WIDTH, TYPE_MARKER>
+where
+    K: Into<Utf8>,
+    V: Into<T>,
+{
+    fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
+        let properties = iter
+            .into_iter()
+            .map(|(k, v)| (k.into(), v.into()))
+            .collect();
+        Self::new(properties)
     }
 }
 
@@ -677,5 +730,76 @@ mod tests {
     fn test_default() {
         let obj: ObjectType<NumberType> = ObjectType::default();
         assert_eq!(obj.len(), 0);
+    }
+
+    // Test TryFrom<&[u8]> success path
+    #[test]
+    fn test_tryfrom_slice_success() {
+        let obj = create_test_object();
+        let data = obj.clone().marshall().unwrap();
+        let from_slice = ObjectType::<NumberType>::try_from(data.as_slice()).unwrap();
+        assert_eq!(obj, from_slice);
+    }
+
+    // Test TryFrom<&[u8]> with wrong type marker
+    #[test]
+    fn test_tryfrom_slice_wrong_marker() {
+        let data = vec![TypeMarker::Null as u8, 0x00, 0x00, 0x09];
+        let result = ObjectType::<NumberType>::try_from(data.as_slice());
+        assert!(matches!(
+            result,
+            Err(AmfError::TypeMarkerValueMismatch { .. })
+        ));
+    }
+
+    // Test Unmarshall buffer too small error
+    #[test]
+    fn test_unmarshall_buffer_too_small() {
+        // Only marker, missing object-end bytes
+        let data = &[TypeMarker::Object as u8];
+        let result = ObjectType::<NumberType>::unmarshall(data);
+        assert!(matches!(
+            result,
+            Err(AmfError::BufferTooSmall { want: _, got: 1 })
+        ));
+    }
+
+    // Test Display for empty object
+    #[test]
+    fn test_display_empty() {
+        let empty: ObjectType<NumberType> = ObjectType::default();
+        assert_eq!(format!("{}", empty), "{}");
+    }
+
+    // Test IntoIterator for empty
+    #[test]
+    fn test_into_iter_empty() {
+        let empty: ECMAArrayType<NumberType> = ECMAArrayType::default();
+        let mut iter = empty.into_iter();
+        assert!(iter.next().is_none());
+    }
+
+    // Test AsRef and Borrow for NestedType
+    #[test]
+    fn test_as_ref_and_borrow() {
+        let obj = create_test_object();
+        let as_ref_map: &IndexMap<Utf8, NumberType> = obj.as_ref();
+        let borrow_map: &IndexMap<Utf8, NumberType> = obj.borrow();
+        assert_eq!(as_ref_map.len(), 2);
+        assert_eq!(borrow_map.len(), 2);
+    }
+
+    // Test ECMAArrayType length mismatch custom error message
+    #[test]
+    fn test_ecma_array_unmarshall_length_mismatch_message() {
+        let mut data = create_test_ecma_array().marshall().unwrap();
+        // Corrupt length field to mismatch
+        data[1..5].copy_from_slice(&0u32.to_be_bytes());
+        let result = ECMAArrayType::<NumberType>::unmarshall(&data);
+        if let Err(AmfError::Custom(msg)) = result {
+            assert!(msg.contains("Invalid properties length"));
+        } else {
+            panic!("Expected Custom error on length mismatch");
+        }
     }
 }

@@ -8,7 +8,7 @@ use std::fmt::{Display, Formatter};
 //	properties in an anonymous object or typed object or associative array. It is not expected
 //	outside of these types. This marker is always preceded by an empty UTF-8 string and
 //	together forms the object end type.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ObjectEndType {
     empty: Utf8,
     type_marker: TypeMarker,
@@ -161,5 +161,13 @@ mod tests {
         let obj_end1 = ObjectEndType::new();
         let obj_end2 = ObjectEndType::default();
         assert_eq!(obj_end1, obj_end2);
+    }
+
+    #[test]
+    fn test_clone_eq() {
+        let original = ObjectEndType::new();
+        let cloned = original.clone();
+        assert_eq!(cloned, original);
+        assert!(!std::ptr::eq(&original, &cloned));
     }
 }

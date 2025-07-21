@@ -147,6 +147,7 @@ pub type Utf8Long = AmfUtf8<4>;
 mod tests {
     use super::*;
     use crate::traits::{Marshall, MarshallLength, Unmarshall};
+    use std::hash::{DefaultHasher, Hash, Hasher};
 
     // 测试有效字符串创建（LENGTH_BYTE_WIDTH=2）
     #[test]
@@ -242,5 +243,65 @@ mod tests {
     fn display_format() {
         let amf_str = AmfUtf8::<2>::new("test").unwrap();
         assert_eq!(format!("{}", amf_str), "test");
+    }
+
+    /// Helper to compute the hash of a value
+    fn calculate_hash<T: Hash>(t: &T) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        t.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[test]
+    fn clone_preserves_equality() {
+        let original = AmfUtf8::<2>::new("hello").unwrap();
+        let cloned = original.clone();
+        // After cloning, they should be equal
+        assert_eq!(original, cloned);
+    }
+
+    #[test]
+    fn eq_and_neq_behaviour() {
+        let a = AmfUtf8::<4>::new("rust").unwrap();
+        let b_same = AmfUtf8::<4>::new("rust").unwrap();
+        let c_diff = AmfUtf8::<4>::new("Rust").unwrap();
+
+        // Same content should be equal
+        assert_eq!(a, b_same);
+        // Different case should not be equal
+        assert_ne!(a, c_diff);
+    }
+
+    #[test]
+    fn equal_values_have_same_hash() {
+        let x = AmfUtf8::<2>::new("hash_me").unwrap();
+        let y = AmfUtf8::<2>::new("hash_me").unwrap();
+
+        let hx = calculate_hash(&x);
+        let hy = calculate_hash(&y);
+        assert_eq!(hx, hy, "Equal values should produce the same hash");
+    }
+
+    #[test]
+    fn different_values_have_different_hash() {
+        let x = AmfUtf8::<2>::new("foo").unwrap();
+        let y = AmfUtf8::<2>::new("bar").unwrap();
+
+        let hx = calculate_hash(&x);
+        let hy = calculate_hash(&y);
+        assert_ne!(hx, hy, "Different values should produce different hashes");
+    }
+
+    #[test]
+    fn clone_preserves_hash() {
+        let original = AmfUtf8::<4>::new("clone_hash").unwrap();
+        let cloned = original.clone();
+
+        let h1 = calculate_hash(&original);
+        let h2 = calculate_hash(&cloned);
+        assert_eq!(
+            h1, h2,
+            "Cloned instance should have the same hash as original"
+        );
     }
 }

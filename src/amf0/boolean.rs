@@ -1,7 +1,6 @@
 use crate::amf0::type_marker::TypeMarker;
 use crate::errors::AmfError;
 use crate::traits::{Marshall, MarshallLength, Unmarshall};
-use std::borrow::Borrow;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 
@@ -10,7 +9,7 @@ use std::ops::Deref;
 //	2.0 Booleans are not serializable. A Boolean type marker is followed by an unsigned
 //	byte; a zero byte value denotes false while a non-zero byte value (typically 1) denotes
 //	true.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BooleanType {
     type_marker: TypeMarker,
     value: bool,
@@ -108,6 +107,7 @@ mod tests {
     use crate::errors::AmfError;
     use std::convert::TryFrom;
     use std::fmt::Write as _;
+    use std::hash::{DefaultHasher, Hash, Hasher};
     // for Display tests
 
     #[test]
@@ -165,5 +165,52 @@ mod tests {
             }
             _ => panic!("expected TypeMarkerValueMismatch"),
         }
+    }
+
+    fn calculate_hash<T: Hash>(t: &T) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        t.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[test]
+    fn clone_preserves_equality() {
+        let orig = BooleanType::new(true);
+        let cloned = orig.clone();
+        assert_eq!(orig, cloned);
+    }
+
+    #[test]
+    fn eq_and_neq_behaviour() {
+        let a = BooleanType::new(true);
+        let b = BooleanType::new(true);
+        let c = BooleanType::new(false);
+
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn equal_values_have_same_hash() {
+        let x = BooleanType::new(true);
+        let y = BooleanType::new(true);
+
+        assert_eq!(calculate_hash(&x), calculate_hash(&y));
+    }
+
+    #[test]
+    fn different_values_have_different_hash() {
+        let x = BooleanType::new(true);
+        let y = BooleanType::new(false);
+
+        assert_ne!(calculate_hash(&x), calculate_hash(&y));
+    }
+
+    #[test]
+    fn clone_preserves_hash() {
+        let orig = BooleanType::new(false);
+        let cloned = orig.clone();
+
+        assert_eq!(calculate_hash(&orig), calculate_hash(&cloned));
     }
 }

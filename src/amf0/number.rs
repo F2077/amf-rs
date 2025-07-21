@@ -133,6 +133,25 @@ mod tests {
     }
 
     #[test]
+    fn test_clone_eq() {
+        let original = NumberType::new(2.718);
+        let cloned = original.clone();
+        // Ensure clone produces an equal value
+        assert_eq!(cloned, original);
+        // Ensure they are distinct instances
+        assert!(!std::ptr::eq(&original, &cloned));
+    }
+
+    #[test]
+    fn test_partial_eq() {
+        let a = NumberType::new(1.0);
+        let b = NumberType::new(1.0);
+        let c = NumberType::new(2.0);
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+
+    #[test]
     fn test_marshall() {
         let num = NumberType::new(3.14);
         let data = num.marshall().unwrap();

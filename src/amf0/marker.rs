@@ -2,6 +2,7 @@ use crate::amf0::type_marker::TypeMarker;
 use crate::errors::AmfError;
 use crate::traits::{Marshall, MarshallLength, Unmarshall};
 use std::fmt::Display;
+use std::hash::{Hash, Hasher};
 
 pub trait MarkerType: Sized {
     const TYPE_MARKER: TypeMarker;
@@ -42,7 +43,7 @@ impl<M: MarkerType + Default> Unmarshall for M {
 
 //	The null type is represented by the null type marker. No further information is encoded
 //	for this value.
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct NullType;
 
 impl MarkerType for NullType {
@@ -63,9 +64,15 @@ impl Display for NullType {
     }
 }
 
+impl Hash for NullType {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        TypeMarker::Null.hash(state);
+    }
+}
+
 //    The undefined type is represented by the undefined type marker. No further information is encoded
 //    for this value.
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct UndefinedType;
 
 impl MarkerType for UndefinedType {
@@ -86,10 +93,17 @@ impl Display for UndefinedType {
     }
 }
 
+impl Hash for UndefinedType {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        TypeMarker::Undefined.hash(state);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::amf0::type_marker::TypeMarker;
+    use std::hash::{DefaultHasher, Hash, Hasher};
 
     // NullType 测试
     #[test]
@@ -187,5 +201,31 @@ mod tests {
 
         // 验证 UndefinedType 的标记
         assert_eq!(UndefinedType::TYPE_MARKER, TypeMarker::Undefined);
+    }
+
+    /// Helper to compute the hash of a value
+    fn calculate_hash<T: Hash>(t: &T) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        t.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[test]
+    fn null_and_undefined_clone_eq_hash() {
+        // Clone and Eq
+        let n1 = NullType::default(); // via Default
+        let n2 = n1.clone();
+        assert_eq!(n1, n2);
+
+        let u1 = UndefinedType::default();
+        let u2 = u1.clone();
+        assert_eq!(u1, u2);
+
+        // Hash equality for equal values
+        assert_eq!(calculate_hash(&n1), calculate_hash(&n2));
+        assert_eq!(calculate_hash(&u1), calculate_hash(&u2));
+
+        // Different types should hash differently
+        assert_ne!(calculate_hash(&n1), calculate_hash(&u1));
     }
 }

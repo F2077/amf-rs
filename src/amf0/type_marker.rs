@@ -2,7 +2,7 @@ use crate::errors::AmfError;
 use std::fmt;
 use std::fmt::Display;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)] // 指定 TypeMarker 类型为 u8 类型(指定枚举类型底层判别值的存储类型)
 pub enum TypeMarker {
     Number = 0x00,

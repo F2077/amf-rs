@@ -7,7 +7,7 @@ use std::fmt::{Display, Formatter};
 use std::io;
 use std::ops::Deref;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct AmfUtf8ValuedType<const LENGTH_BYTE_WIDTH: usize, const TYPE_MARKER: u8> {
     inner: AmfUtf8<LENGTH_BYTE_WIDTH>,
 }
@@ -130,6 +130,7 @@ pub type LongStringType = AmfUtf8ValuedType<4, { TypeMarker::LongString as u8 }>
 mod tests {
     use super::*;
     use crate::amf0::utf8::AmfUtf8;
+    use std::hash::{DefaultHasher, Hash, Hasher};
 
     // 测试 AmfUtf8ValuedType 的通用功能
     #[test]
@@ -337,5 +338,73 @@ mod tests {
     fn test_long_string_type_alias() {
         let s: LongStringType = AmfUtf8::<4>::new("test").unwrap().try_into().unwrap();
         assert_eq!(s.as_ref().as_ref(), "test");
+    }
+
+    /// Helper to compute the hash of any `T: Hash`
+    fn hash_of<T: Hash>(t: &T) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        t.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[test]
+    fn string_type_clone_and_eq() {
+        // create an original value
+        let inner = AmfUtf8::<2>::new("hello").unwrap();
+        let orig: StringType = StringType::new(inner);
+
+        // Clone should produce an equal value
+        let cloned = orig.clone();
+        assert_eq!(orig, cloned, "Clone must preserve value (PartialEq/ Eq)");
+
+        // Hash of orig and cloned should be the same
+        let h1 = hash_of(&orig);
+        let h2 = hash_of(&cloned);
+        assert_eq!(h1, h2, "Hash must be consistent for equal values");
+    }
+
+    #[test]
+    fn string_type_hash_differs_on_content_change() {
+        let a = StringType::new(AmfUtf8::<2>::new("foo").unwrap());
+        let b = StringType::new(AmfUtf8::<2>::new("bar").unwrap());
+        // different strings must produce different hashes (very likely)
+        assert_ne!(
+            hash_of(&a),
+            hash_of(&b),
+            "Different values should hash differently"
+        );
+    }
+
+    #[test]
+    fn long_string_type_clone_and_eq() {
+        let inner = AmfUtf8::<4>::new("a very long string").unwrap();
+        let orig: LongStringType = LongStringType::new(inner);
+
+        // Clone ↔ Eq
+        let cloned = orig.clone();
+        assert_eq!(orig, cloned);
+
+        // Hash consistency
+        assert_eq!(hash_of(&orig), hash_of(&cloned));
+    }
+
+    #[test]
+    fn long_string_type_hash_differs_on_content_change() {
+        let a = LongStringType::new(AmfUtf8::<4>::new("one").unwrap());
+        let b = LongStringType::new(AmfUtf8::<4>::new("two").unwrap());
+        assert_ne!(hash_of(&a), hash_of(&b));
+    }
+    #[test]
+    fn test_string_type_clone_partial_eq() {
+        let s1: StringType = StringType::default();
+        let s2 = s1.clone();
+        assert_eq!(s1, s2);
+    }
+
+    #[test]
+    fn test_long_string_type_clone_partial_eq() {
+        let ls1: LongStringType = LongStringType::default();
+        let ls2 = ls1.clone();
+        assert_eq!(ls1, ls2);
     }
 }
