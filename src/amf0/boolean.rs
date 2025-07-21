@@ -89,14 +89,81 @@ impl Deref for BooleanType {
     }
 }
 
-impl Borrow<bool> for BooleanType {
-    fn borrow(&self) -> &bool {
-        &self.value // 注意 Borrow 需要返回的是引用，所以这里返回的是 &bool
-    }
-}
-
 impl Display for BooleanType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.value)
+    }
+}
+
+impl Default for BooleanType {
+    fn default() -> Self {
+        Self::new(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::amf0::type_marker::TypeMarker;
+    use crate::errors::AmfError;
+    use std::convert::TryFrom;
+    use std::fmt::Write as _;
+    // for Display tests
+
+    #[test]
+    fn boolean_round_trip_true() {
+        let orig = BooleanType::new(true);
+        let bytes = orig.marshall().expect("marshall should succeed");
+        // [marker, value]
+        assert_eq!(bytes, vec![TypeMarker::Boolean as u8, 1]);
+        // unmarshall
+        let (decoded, len) = BooleanType::unmarshall(&bytes).expect("unmarshall should succeed");
+        assert_eq!(len, 2);
+        assert_eq!(decoded.value, true);
+        // TryFrom
+        let from_buf = BooleanType::try_from(&bytes[..]).unwrap();
+        assert_eq!(from_buf.value, true);
+        // From<bool>
+        let from_bool: BooleanType = false.into();
+        assert_eq!(from_bool.value, false);
+        // AsRef, Deref
+        assert_eq!(orig.as_ref(), &true);
+        assert_eq!(*orig, true);
+        // Display
+        let mut s = String::new();
+        write!(&mut s, "{}", orig).unwrap();
+        assert_eq!(s, "true");
+    }
+
+    #[test]
+    fn boolean_round_trip_false() {
+        let orig = BooleanType::new(false);
+        let bytes = orig.marshall().unwrap();
+        assert_eq!(bytes, vec![TypeMarker::Boolean as u8, 0]);
+        let (decoded, _) = BooleanType::unmarshall(&bytes).unwrap();
+        assert!(!decoded.value);
+    }
+
+    #[test]
+    fn boolean_unmarshall_errors() {
+        // too short
+        let err = BooleanType::unmarshall(&[TypeMarker::Boolean as u8]).unwrap_err();
+        match err {
+            AmfError::BufferTooSmall { want, got } => {
+                assert_eq!(want, 2);
+                assert_eq!(got, 1);
+            }
+            _ => panic!("expected BufferTooSmall"),
+        }
+        // wrong marker
+        let bad = vec![TypeMarker::Number as u8, 1];
+        let err2 = BooleanType::unmarshall(&bad).unwrap_err();
+        match err2 {
+            AmfError::TypeMarkerValueMismatch { want, got } => {
+                assert_eq!(want, TypeMarker::Boolean as u8);
+                assert_eq!(got, TypeMarker::Number as u8);
+            }
+            _ => panic!("expected TypeMarkerValueMismatch"),
+        }
     }
 }

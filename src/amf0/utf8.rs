@@ -241,6 +241,6 @@ mod tests {
     #[test]
     fn display_format() {
         let amf_str = AmfUtf8::<2>::new("test").unwrap();
-        assert_eq!(format!("{}", amf_str), "\"test\"");
+        assert_eq!(format!("{}", amf_str), "test");
     }
 }

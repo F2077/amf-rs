@@ -1,13 +1,13 @@
 use crate::errors::AmfError;
 
-pub(crate) trait Marshall {
+pub trait Marshall {
     fn marshall(&self) -> Result<Vec<u8>, AmfError>;
 }
 
-pub(crate) trait MarshallLength {
+pub trait MarshallLength {
     fn marshall_length(&self) -> usize;
 }
 
-pub(crate) trait Unmarshall: Sized {
+pub trait Unmarshall: Sized {
     fn unmarshall(buf: &[u8]) -> Result<(Self, usize), AmfError>;
 }

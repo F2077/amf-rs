@@ -10,7 +10,7 @@ use std::io;
 use std::ops::Deref;
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) struct NestedType<
+pub struct NestedType<
     T: Marshall + MarshallLength + Unmarshall,
     const LENGTH_BYTE_WIDTH: usize,
     const TYPE_MARKER: u8,
@@ -130,18 +130,12 @@ impl<
 
         let mut properties = IndexMap::new();
         let mut offset = 1 + LENGTH_BYTE_WIDTH;
-        loop {
-            if offset == buf.len() - 3 {
+        while offset < buf.len() {
+            if offset <= buf.len() - 3 {
                 // 找到了 object end 则退出循环
-                let (object_end, _) = ObjectEndType::unmarshall(&buf[offset..])?;
-                if object_end == ObjectEndType::default() {
+                if buf[offset] == 0x00 && buf[offset + 1] == 0x00 && buf[offset + 2] == 0x09 {
                     break;
                 }
-            }
-            if offset == buf.len() {
-                return Err(AmfError::Custom(
-                    "Invalid object, expected object end, got end of buffer".to_string(),
-                ));
             }
 
             let (k, k_len) = Utf8::unmarshall(&buf[offset..])?;
@@ -151,7 +145,15 @@ impl<
             properties.insert(k, v);
         }
 
-        if properties.len() != length as usize {
+        // 校验 object end 存在
+        if buf[buf.len() - 3..] != [0x00, 0x00, 0x09] {
+            return Err(AmfError::Custom(
+                "Invalid object, expected object end, got end of buffer".to_string(),
+            ));
+        }
+
+        // 仅在 EcmaArray 情况下校验长度
+        if LENGTH_BYTE_WIDTH == 4 && properties.len() != length as usize {
             return Err(AmfError::Custom(format!(
                 "Invalid properties length, want {}, got {}",
                 length,
@@ -159,7 +161,14 @@ impl<
             )));
         }
 
-        Ok((Self::new(properties), offset))
+        let read_size = if offset == buf.len() {
+            offset
+        } else if offset == buf.len() - 3 {
+            offset + 3
+        } else {
+            buf.len()
+        };
+        Ok((Self::new(properties), read_size))
     }
 }
 
@@ -261,3 +270,412 @@ pub type ObjectType<T: Marshall + MarshallLength + Unmarshall> =
 // For the purposes of serialization this type is very similar to ananonymous Obiect.
 pub type ECMAArrayType<T: Marshall + MarshallLength + Unmarshall> =
     NestedType<T, 4, { TypeMarker::EcmaArray as u8 }>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::amf0::number::NumberType;
+    use crate::amf0::type_marker::TypeMarker;
+    use indexmap::IndexMap;
+
+    // 测试辅助函数：创建测试对象
+    fn create_test_object() -> ObjectType<NumberType> {
+        let mut properties = IndexMap::new();
+        properties.insert(Utf8::new("a".into()).unwrap(), NumberType::new(1.0));
+        properties.insert(Utf8::new("b".into()).unwrap(), NumberType::new(2.0));
+        ObjectType::new(properties)
+    }
+
+    // 测试辅助函数：创建测试 ECMA 数组
+    fn create_test_ecma_array() -> ECMAArrayType<NumberType> {
+        let mut properties = IndexMap::new();
+        properties.insert(Utf8::new("a".into()).unwrap(), NumberType::new(1.0));
+        properties.insert(Utf8::new("b".into()).unwrap(), NumberType::new(2.0));
+        ECMAArrayType::new(properties)
+    }
+
+    // ObjectType 测试组
+    #[test]
+    fn test_object_new() {
+        let obj = create_test_object();
+        assert_eq!(obj.len(), 2);
+        assert_eq!(obj["a"], NumberType::new(1.0));
+        assert_eq!(obj["b"], NumberType::new(2.0));
+    }
+
+    #[test]
+    fn test_object_marshall() {
+        let obj = create_test_object();
+        let data = obj.marshall().unwrap();
+
+        // 验证类型标记
+        assert_eq!(data[0], TypeMarker::Object as u8);
+
+        // 验证序列化结构
+        let expected = vec![
+            TypeMarker::Object as u8, // 对象标记
+            0x00,
+            0x01,
+            b'a', // 键 "a"
+            TypeMarker::Number as u8,
+            0x3F,
+            0xF0,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00, // 值 1.0
+            0x00,
+            0x01,
+            b'b', // 键 "b"
+            TypeMarker::Number as u8,
+            0x40,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00, // 值 2.0
+            0x00,
+            0x00,
+            0x09, // 对象结束标记
+        ];
+
+        assert_eq!(data, expected);
+    }
+
+    #[test]
+    fn test_object_marshall_length() {
+        let obj = create_test_object();
+        // 1 (marker) + 2*3 (keys: 2 bytes length + 1 char) + 2*9 (values) + 3 (object end)
+        assert_eq!(obj.marshall_length(), 1 + (3 + 9) * 2 + 3);
+    }
+
+    #[test]
+    fn test_object_unmarshall() {
+        let data = vec![
+            TypeMarker::Object as u8, // 对象标记
+            // 键 "a"
+            0x00,
+            0x01,
+            b'a',
+            // 值 1.0
+            TypeMarker::Number as u8,
+            0x3F,
+            0xF0,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            // 键 "b"
+            0x00,
+            0x01,
+            b'b',
+            // 值 2.0
+            TypeMarker::Number as u8,
+            0x40,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            // 对象结束
+            0x00,
+            0x00,
+            0x09,
+        ];
+
+        let (obj, bytes_read) = ObjectType::<NumberType>::unmarshall(&data).unwrap();
+        assert_eq!(bytes_read, data.len());
+        assert_eq!(obj.len(), 2);
+        assert_eq!(obj["a"], NumberType::new(1.0));
+        assert_eq!(obj["b"], NumberType::new(2.0));
+    }
+
+    #[test]
+    fn test_object_unmarshall_empty() {
+        let data = vec![
+            TypeMarker::Object as u8, // 对象标记
+            // 对象结束
+            0x00,
+            0x00,
+            0x09,
+        ];
+
+        let (obj, bytes_read) = ObjectType::<NumberType>::unmarshall(&data).unwrap();
+        assert_eq!(bytes_read, data.len());
+        assert_eq!(obj.len(), 0);
+    }
+
+    #[test]
+    fn test_object_unmarshall_invalid_marker() {
+        let data = vec![
+            TypeMarker::Null as u8, // 错误的标记
+            0x00,
+            0x01,
+            b'a',
+            TypeMarker::Number as u8,
+            0x3F,
+            0xF0,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x09,
+        ];
+
+        let result = ObjectType::<NumberType>::unmarshall(&data);
+        assert!(matches!(
+            result,
+            Err(AmfError::TypeMarkerValueMismatch {
+                want: 0x03,
+                got: 0x05
+            })
+        ));
+    }
+
+    #[test]
+    fn test_object_unmarshall_missing_end() {
+        let data = vec![
+            TypeMarker::Object as u8,
+            0x00,
+            0x01,
+            b'a',
+            TypeMarker::Number as u8,
+            0x3F,
+            0xF0,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            // 缺少对象结束标记
+        ];
+
+        let result = ObjectType::<NumberType>::unmarshall(&data);
+        assert!(matches!(result, Err(AmfError::Custom(_))));
+    }
+
+    // ECMAArrayType 测试组
+    #[test]
+    fn test_ecma_array_new() {
+        let arr = create_test_ecma_array();
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr["a"], NumberType::new(1.0));
+        assert_eq!(arr["b"], NumberType::new(2.0));
+    }
+
+    #[test]
+    fn test_ecma_array_marshall() {
+        let arr = create_test_ecma_array();
+        let data = arr.marshall().unwrap();
+
+        // 验证类型标记
+        assert_eq!(data[0], TypeMarker::EcmaArray as u8);
+
+        // 验证长度字段 (4 字节)
+        assert_eq!(&data[1..5], [0x00, 0x00, 0x00, 0x02]);
+
+        // 验证序列化结构
+        let expected = vec![
+            TypeMarker::EcmaArray as u8, // ECMA 数组标记
+            0x00,
+            0x00,
+            0x00,
+            0x02, // 长度 2
+            // 键 "a"
+            0x00,
+            0x01,
+            b'a',
+            // 值 1.0
+            TypeMarker::Number as u8,
+            0x3F,
+            0xF0,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            // 键 "b"
+            0x00,
+            0x01,
+            b'b',
+            // 值 2.0
+            TypeMarker::Number as u8,
+            0x40,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            // 对象结束
+            0x00,
+            0x00,
+            0x09,
+        ];
+
+        assert_eq!(data, expected);
+    }
+
+    #[test]
+    fn test_ecma_array_marshall_length() {
+        let arr = create_test_ecma_array();
+        // 1 (marker) + 4 (length) + 2*3 (keys) + 2*9 (values) + 3 (object end)
+        assert_eq!(arr.marshall_length(), 1 + 4 + (3 + 9) * 2 + 3);
+    }
+
+    #[test]
+    fn test_ecma_array_unmarshall() {
+        let data = vec![
+            TypeMarker::EcmaArray as u8, // ECMA 数组标记
+            0x00,
+            0x00,
+            0x00,
+            0x02, // 长度 2
+            // 键 "a"
+            0x00,
+            0x01,
+            b'a',
+            // 值 1.0
+            TypeMarker::Number as u8,
+            0x3F,
+            0xF0,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            // 键 "b"
+            0x00,
+            0x01,
+            b'b',
+            // 值 2.0
+            TypeMarker::Number as u8,
+            0x40,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            // 对象结束
+            0x00,
+            0x00,
+            0x09,
+        ];
+
+        let (arr, bytes_read) = ECMAArrayType::<NumberType>::unmarshall(&data).unwrap();
+        assert_eq!(bytes_read, data.len());
+        assert_eq!(arr.len(), 2);
+        assert_eq!(arr["a"], NumberType::new(1.0));
+        assert_eq!(arr["b"], NumberType::new(2.0));
+    }
+
+    #[test]
+    fn test_ecma_array_unmarshall_length_mismatch() {
+        let data = vec![
+            TypeMarker::EcmaArray as u8, // ECMA 数组标记
+            0x00,
+            0x00,
+            0x00,
+            0x03, // 长度 3 (但实际只有2个属性)
+            // 键 "a"
+            0x00,
+            0x01,
+            b'a',
+            // 值 1.0
+            TypeMarker::Number as u8,
+            0x3F,
+            0xF0,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            // 键 "b"
+            0x00,
+            0x01,
+            b'b',
+            // 值 2.0
+            TypeMarker::Number as u8,
+            0x40,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+            // 对象结束
+            0x00,
+            0x00,
+            0x09,
+        ];
+
+        let result = ECMAArrayType::<NumberType>::unmarshall(&data);
+        assert!(matches!(result, Err(AmfError::Custom(_))));
+    }
+
+    // 通用功能测试
+    #[test]
+    fn test_as_ref() {
+        let obj = create_test_object();
+        let map: &IndexMap<Utf8, NumberType> = obj.as_ref();
+        assert_eq!(map.len(), 2);
+    }
+
+    #[test]
+    fn test_deref() {
+        let obj = create_test_object();
+        let map: &IndexMap<Utf8, NumberType> = &obj;
+        assert_eq!(map.len(), 2);
+    }
+
+    #[test]
+    fn test_display() {
+        let obj = create_test_object();
+        let display = format!("{}", obj);
+        // 顺序可能不同，所以检查两种可能
+        let valid1 = r#"{"a": 1, "b": 2}"#;
+        let valid2 = r#"{"b": 2, "a": 1}"#;
+        assert!(display == valid1 || display == valid2);
+    }
+
+    #[test]
+    fn test_into_iter() {
+        let obj = create_test_object();
+        let mut iter = obj.into_iter();
+
+        // 顺序可能不同
+        let (k1, v1) = iter.next().unwrap();
+        let (k2, v2) = iter.next().unwrap();
+        assert!(k1.as_ref() == "a" || k1.as_ref() == "b");
+        assert!(k2.as_ref() == "a" || k2.as_ref() == "b");
+        assert_ne!(k1, k2);
+        assert_eq!(v1 + v2, NumberType::new(3.0)); // 1 + 2 = 3
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn test_default() {
+        let obj: ObjectType<NumberType> = ObjectType::default();
+        assert_eq!(obj.len(), 0);
+    }
+}
