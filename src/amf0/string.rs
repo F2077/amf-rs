@@ -141,7 +141,7 @@ impl<const LBW: usize, const TM: u8> Borrow<AmfUtf8<LBW>> for AmfUtf8ValuedType<
 
 impl<const LBW: usize, const TM: u8> Display for AmfUtf8ValuedType<LBW, TM> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.inner)
+        write!(f, "\"{}\"", self.inner)
     }
 }
 

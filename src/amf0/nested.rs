@@ -403,10 +403,10 @@ impl<const LBW: usize, const TM: u8> Display for NestedType<LBW, TM> {
         while let Some((key, value)) = iter.next() {
             // 写入 "key": value
             // 注意 key 和 value 会自动使用它们自己的 Display 实现
-            write!(f, "\"{}\": {}", key, value)?;
+            write!(f, "\"{}\":{}", key, value)?;
             // 如果这不是最后一个元素，就写入一个逗号和空格
             if iter.peek().is_some() {
-                write!(f, ", ")?;
+                write!(f, ",")?;
             }
         }
         write!(f, "}}") // 写入结尾的 "}"

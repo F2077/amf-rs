@@ -1,6 +1,6 @@
 use std::{
-    fs::{self, File},
-    io::{self, BufReader, Read, Seek, SeekFrom, Write},
+    fs::File,
+    io::{self, BufReader, Read, Seek, SeekFrom},
     process::Command,
 };
 
@@ -8,19 +8,19 @@ mod test_setup {
     use super::*;
     use once_cell::sync::OnceCell;
     use regex::Regex;
-    use std::env;
     use std::path::PathBuf;
+    use std::{env, fs};
 
-    static SCRIPT_DATA: OnceCell<Vec<u8>> = OnceCell::new();
+    static SCRIPT_DATA: OnceCell<(Vec<u8>, String)> = OnceCell::new();
 
-    pub fn setup() -> &'static Vec<u8> {
+    pub fn setup() -> &'static (Vec<u8>, String) {
         SCRIPT_DATA.get_or_init(|| flv_metadata_generation().unwrap())
     }
 
-    fn flv_metadata_generation() -> io::Result<Vec<u8>> {
+    fn flv_metadata_generation() -> io::Result<(Vec<u8>, String)> {
         // 检查必要命令是否存在
         assert!(command_exists("ffmpeg"), "ffmpeg not installed");
-        assert!(command_exists("ffprobe"), "ffprobe not installed");
+        assert!(command_exists("flvmeta"), "flvmeta not installed");
         assert!(check_ffmpeg_version(6), "requires ffmpeg version 6.0+");
 
         // 获取包含 Cargo.toml 的目录的路径
@@ -104,12 +104,22 @@ mod test_setup {
 
         assert!(found, "ScriptData Tag not found");
 
+        // 使用 ffprobe + jq 提取 JSON
+        let probe = Command::new("flvmeta")
+            .args(&["-j", output_path.as_path().to_str().unwrap()])
+            .output()?;
+        assert!(probe.status.success(), "ffprobe failed");
+
+        let json_data = String::from_utf8_lossy(&probe.stdout)
+            .replace("\n", "")
+            .replace("\r", "");
+
         // 清理FLV文件
         if output_path.exists() {
             fs::remove_file(output_path.as_path())?;
         }
 
-        Ok(tag_data)
+        Ok((tag_data, json_data))
     }
 
     fn check_ffmpeg_version(min_major: u32) -> bool {
@@ -155,17 +165,25 @@ mod tests {
 
     #[test]
     fn test_amf_rs() {
-        let test_data = test_setup::setup();
-        let buf = test_data.as_slice();
+        let test_case = test_setup::setup();
+        let buf = test_case.0.as_slice();
 
         let mut string_builder = String::new();
         let mut offset = 0;
         while offset < buf.len() {
             let (v, n) = Amf0TypedValue::unmarshall(&buf[offset..]).unwrap();
-            string_builder.push_str(&format!("{}", v));
+            let s = &format!("{}", v);
+            if s != "\"onMetaData\"" {
+                string_builder.push_str(s);
+            }
             offset += n;
         }
 
-        println!("{}", string_builder);
+        let expect = &test_case.1;
+        let actual = &string_builder;
+        println!("EXPECT= {}", expect);
+        println!("ACTUAL= {}", actual);
+
+        assert_eq!(expect, actual);
     }
 }
