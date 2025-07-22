@@ -2,6 +2,8 @@ use crate::errors::AmfError;
 use std::fmt;
 use std::fmt::Display;
 
+// There are 16 core type markers in AMF 0. A type marker is one byte in length and
+// describes the kind of encoded data that may follow.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)] // 指定 TypeMarker 类型为 u8 类型(指定枚举类型底层判别值的存储类型)
 pub enum TypeMarker {

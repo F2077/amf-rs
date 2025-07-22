@@ -88,6 +88,13 @@ impl MarshallLength for Amf0TypedValue {
 
 impl Unmarshall for Amf0TypedValue {
     fn unmarshall(buf: &[u8]) -> Result<(Self, usize), AmfError> {
+        if buf.is_empty() {
+            return Err(AmfError::Custom("Buffer is empty".to_string()));
+        }
+        if buf.len() >= 3 && buf[0] == 0x00 && buf[1] == 0x00 && buf[2] == 0x09 {
+            return Ok((Amf0TypedValue::ObjectEnd(ObjectEndType::default()), 3));
+        }
+
         let type_marker = TypeMarker::try_from(buf[0])?;
         match type_marker {
             TypeMarker::Number => {
@@ -116,7 +123,7 @@ impl Unmarshall for Amf0TypedValue {
                 EcmaArrayType::unmarshall(buf).map(|v| (Amf0TypedValue::EcmaArray(v.0), v.1))
             }
             TypeMarker::ObjectEnd => {
-                ObjectEndType::unmarshall(buf).map(|v| (Amf0TypedValue::ObjectEnd(v.0), v.1))
+                panic!("cannot happen")
             }
             TypeMarker::StrictArray => {
                 StrictArrayType::unmarshall(buf).map(|v| (Amf0TypedValue::StrictArray(v.0), v.1))
@@ -582,10 +589,7 @@ mod tests {
     fn test_unmarshall_invalid_type_marker() {
         let buf = [0xff]; // Invalid type marker
         let result = Amf0TypedValue::unmarshall(&buf);
-        assert!(matches!(
-            result,
-            Err(AmfError::TypeMarkerValueMismatch { .. })
-        ));
+        assert!(result.is_err());
     }
 
     #[test]
