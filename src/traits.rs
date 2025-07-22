@@ -11,3 +11,7 @@ pub trait MarshallLength {
 pub trait Unmarshall: Sized {
     fn unmarshall(buf: &[u8]) -> Result<(Self, usize), AmfError>;
 }
+
+pub trait AmfType: Marshall + MarshallLength + Unmarshall {}
+
+impl<T: Marshall + MarshallLength + Unmarshall> AmfType for T {}

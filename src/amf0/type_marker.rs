@@ -24,12 +24,6 @@ pub enum TypeMarker {
     TypedObject = 0x10,
 }
 
-impl Display for TypeMarker {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
 impl TryFrom<u8> for TypeMarker {
     type Error = AmfError;
 
@@ -57,5 +51,11 @@ impl TryFrom<u8> for TypeMarker {
                 v
             ))),
         }
+    }
+}
+
+impl Display for TypeMarker {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}", self)
     }
 }

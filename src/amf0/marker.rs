@@ -5,13 +5,13 @@ use std::fmt::Display;
 use std::hash::{Hash, Hasher};
 
 pub trait MarkerType: Sized {
-    const TYPE_MARKER: TypeMarker;
+    const TM: TypeMarker;
 }
 
 impl<M: MarkerType> Marshall for M {
     fn marshall(&self) -> Result<Vec<u8>, AmfError> {
         let mut buf = [0u8; 1];
-        buf[0] = M::TYPE_MARKER as u8; // 单字节情况下，不需考虑字节序问题
+        buf[0] = M::TM as u8; // 单字节情况下，不需考虑字节序问题
         Ok(buf.to_vec())
     }
 }
@@ -31,9 +31,9 @@ impl<M: MarkerType + Default> Unmarshall for M {
             });
         }
         let type_marker = TypeMarker::try_from(buf[0])?;
-        if type_marker != M::TYPE_MARKER {
+        if type_marker != M::TM {
             return Err(AmfError::TypeMarkerValueMismatch {
-                want: M::TYPE_MARKER as u8,
+                want: M::TM as u8,
                 got: buf[0],
             });
         }
@@ -47,8 +47,10 @@ impl<M: MarkerType + Default> Unmarshall for M {
 pub struct NullType;
 
 impl MarkerType for NullType {
-    const TYPE_MARKER: TypeMarker = TypeMarker::Null;
+    const TM: TypeMarker = TypeMarker::Null;
 }
+
+// 实现 rust 惯用语("idiom") 方便用户使用
 
 impl TryFrom<&[u8]> for NullType {
     type Error = AmfError;
@@ -76,8 +78,10 @@ impl Hash for NullType {
 pub struct UndefinedType;
 
 impl MarkerType for UndefinedType {
-    const TYPE_MARKER: TypeMarker = TypeMarker::Undefined;
+    const TM: TypeMarker = TypeMarker::Undefined;
 }
+
+// 实现 rust 惯用语("idiom") 方便用户使用
 
 impl TryFrom<&[u8]> for UndefinedType {
     type Error = AmfError;
@@ -197,10 +201,10 @@ mod tests {
     #[test]
     fn test_generic_marker_type() {
         // 验证 NullType 的标记
-        assert_eq!(NullType::TYPE_MARKER, TypeMarker::Null);
+        assert_eq!(NullType::TM, TypeMarker::Null);
 
         // 验证 UndefinedType 的标记
-        assert_eq!(UndefinedType::TYPE_MARKER, TypeMarker::Undefined);
+        assert_eq!(UndefinedType::TM, TypeMarker::Undefined);
     }
 
     /// Helper to compute the hash of a value

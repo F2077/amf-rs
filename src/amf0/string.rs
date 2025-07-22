@@ -4,47 +4,47 @@ use crate::errors::AmfError;
 use crate::traits::{Marshall, MarshallLength, Unmarshall};
 use std::borrow::Borrow;
 use std::fmt::{Display, Formatter};
-use std::io;
 use std::ops::Deref;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct AmfUtf8ValuedType<const LENGTH_BYTE_WIDTH: usize, const TYPE_MARKER: u8> {
-    inner: AmfUtf8<LENGTH_BYTE_WIDTH>,
+pub struct AmfUtf8ValuedType<const LBW: usize, const TM: u8> {
+    inner: AmfUtf8<LBW>,
 }
 
-impl<const LENGTH_BYTE_WIDTH: usize, const TYPE_MARKER: u8>
-    AmfUtf8ValuedType<LENGTH_BYTE_WIDTH, TYPE_MARKER>
-{
-    pub fn new(inner: AmfUtf8<LENGTH_BYTE_WIDTH>) -> Self {
+impl<const LBW: usize, const TM: u8> AmfUtf8ValuedType<LBW, TM> {
+    pub fn new(inner: AmfUtf8<LBW>) -> Self {
         Self { inner }
+    }
+
+    pub fn new_from_string(value: String) -> Result<Self, AmfError> {
+        let inner = AmfUtf8::<LBW>::new(value)?;
+        Ok(Self::new(inner))
+    }
+
+    pub fn new_from_str(value: &str) -> Result<Self, AmfError> {
+        Self::new_from_string(value.to_string())
     }
 }
 
-impl<const LENGTH_BYTE_WIDTH: usize, const TYPE_MARKER: u8> Marshall
-    for AmfUtf8ValuedType<LENGTH_BYTE_WIDTH, TYPE_MARKER>
-{
+impl<const LBW: usize, const TM: u8> Marshall for AmfUtf8ValuedType<LBW, TM> {
     fn marshall(&self) -> Result<Vec<u8>, AmfError> {
         let mut vec = Vec::with_capacity(self.marshall_length());
-        vec.push(TYPE_MARKER);
+        vec.push(TM);
         let inner_vec = self.inner.marshall()?;
         vec.extend_from_slice(inner_vec.as_slice());
         Ok(vec)
     }
 }
 
-impl<const LENGTH_BYTE_WIDTH: usize, const TYPE_MARKER: u8> MarshallLength
-    for AmfUtf8ValuedType<LENGTH_BYTE_WIDTH, TYPE_MARKER>
-{
+impl<const LBW: usize, const TM: u8> MarshallLength for AmfUtf8ValuedType<LBW, TM> {
     fn marshall_length(&self) -> usize {
         1 + self.inner.marshall_length()
     }
 }
 
-impl<const LENGTH_BYTE_WIDTH: usize, const TYPE_MARKER: u8> Unmarshall
-    for AmfUtf8ValuedType<LENGTH_BYTE_WIDTH, TYPE_MARKER>
-{
+impl<const LBW: usize, const TM: u8> Unmarshall for AmfUtf8ValuedType<LBW, TM> {
     fn unmarshall(buf: &[u8]) -> Result<(Self, usize), AmfError> {
-        let required_size = 1 + LENGTH_BYTE_WIDTH;
+        let required_size = 1 + LBW;
         if buf.len() < required_size {
             return Err(AmfError::BufferTooSmall {
                 want: required_size,
@@ -52,9 +52,9 @@ impl<const LENGTH_BYTE_WIDTH: usize, const TYPE_MARKER: u8> Unmarshall
             });
         }
 
-        if buf[0] != TYPE_MARKER {
+        if buf[0] != TM {
             return Err(AmfError::TypeMarkerValueMismatch {
-                want: TYPE_MARKER,
+                want: TM,
                 got: buf[0],
             });
         }
@@ -63,57 +63,71 @@ impl<const LENGTH_BYTE_WIDTH: usize, const TYPE_MARKER: u8> Unmarshall
     }
 }
 
-impl<const LENGTH_BYTE_WIDTH: usize, const TYPE_MARKER: u8> TryFrom<AmfUtf8<LENGTH_BYTE_WIDTH>>
-    for AmfUtf8ValuedType<LENGTH_BYTE_WIDTH, TYPE_MARKER>
-{
-    type Error = io::Error;
+// 实现 rust 惯用语("idiom") 方便用户使用
 
-    fn try_from(value: AmfUtf8<LENGTH_BYTE_WIDTH>) -> Result<Self, Self::Error> {
-        Ok(Self::new(value))
+impl<const LBW: usize, const TM: u8> TryFrom<&[u8]> for AmfUtf8ValuedType<LBW, TM> {
+    type Error = AmfError;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        Self::unmarshall(value).map(|(inner, _)| inner)
     }
 }
 
-impl<const LENGTH_BYTE_WIDTH: usize, const TYPE_MARKER: u8> AsRef<AmfUtf8<LENGTH_BYTE_WIDTH>>
-    for AmfUtf8ValuedType<LENGTH_BYTE_WIDTH, TYPE_MARKER>
-{
-    fn as_ref(&self) -> &AmfUtf8<LENGTH_BYTE_WIDTH> {
+impl<const LBW: usize, const TM: u8> TryFrom<String> for AmfUtf8ValuedType<LBW, TM> {
+    type Error = AmfError;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new_from_string(value)
+    }
+}
+
+impl<const LBW: usize, const TM: u8> TryFrom<&str> for AmfUtf8ValuedType<LBW, TM> {
+    type Error = AmfError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        Self::new_from_str(value)
+    }
+}
+
+impl<const LBW: usize, const TM: u8> From<AmfUtf8<LBW>> for AmfUtf8ValuedType<LBW, TM> {
+    fn from(value: AmfUtf8<LBW>) -> Self {
+        Self::new(value)
+    }
+}
+
+impl<const LBW: usize, const TM: u8> AsRef<AmfUtf8<LBW>> for AmfUtf8ValuedType<LBW, TM> {
+    fn as_ref(&self) -> &AmfUtf8<LBW> {
         &self.inner
     }
 }
 
-impl<const LENGTH_BYTE_WIDTH: usize, const TYPE_MARKER: u8> Deref
-    for AmfUtf8ValuedType<LENGTH_BYTE_WIDTH, TYPE_MARKER>
-{
-    type Target = AmfUtf8<LENGTH_BYTE_WIDTH>;
+impl<const LBW: usize, const TM: u8> Deref for AmfUtf8ValuedType<LBW, TM> {
+    type Target = AmfUtf8<LBW>;
 
     fn deref(&self) -> &Self::Target {
         self.as_ref()
     }
 }
 
-impl<const LENGTH_BYTE_WIDTH: usize, const TYPE_MARKER: u8> Borrow<AmfUtf8<LENGTH_BYTE_WIDTH>>
-    for AmfUtf8ValuedType<LENGTH_BYTE_WIDTH, TYPE_MARKER>
-{
-    fn borrow(&self) -> &AmfUtf8<LENGTH_BYTE_WIDTH> {
+impl<const LBW: usize, const TM: u8> Borrow<AmfUtf8<LBW>> for AmfUtf8ValuedType<LBW, TM> {
+    fn borrow(&self) -> &AmfUtf8<LBW> {
         self.as_ref()
     }
 }
 
-impl<const LENGTH_BYTE_WIDTH: usize, const TYPE_MARKER: u8> Display
-    for AmfUtf8ValuedType<LENGTH_BYTE_WIDTH, TYPE_MARKER>
-{
+impl<const LBW: usize, const TM: u8> Display for AmfUtf8ValuedType<LBW, TM> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.inner)
     }
 }
 
-impl<const LENGTH_BYTE_WIDTH: usize, const TYPE_MARKER: u8> Default
-    for AmfUtf8ValuedType<LENGTH_BYTE_WIDTH, TYPE_MARKER>
-{
+impl<const LBW: usize, const TM: u8> Default for AmfUtf8ValuedType<LBW, TM> {
     fn default() -> Self {
-        Self::new(AmfUtf8::<LENGTH_BYTE_WIDTH>::default())
+        Self::new(AmfUtf8::<LBW>::default())
     }
 }
+
+// 类型别名
 
 //	All strings in AMF are encoded using UTF-8; however, the byte-length header format
 //	may vary. The AMF 0 String type uses the standard byte-length header (i.e. U16). For
@@ -135,7 +149,7 @@ mod tests {
     // 测试 AmfUtf8ValuedType 的通用功能
     #[test]
     fn test_new() {
-        let utf8 = AmfUtf8::<2>::new("test").unwrap();
+        let utf8 = AmfUtf8::<2>::new_from_str("test").unwrap();
         let valued = AmfUtf8ValuedType::<2, 0x02>::new(utf8.clone());
         assert_eq!(valued.inner, utf8);
     }
@@ -148,35 +162,35 @@ mod tests {
 
     #[test]
     fn test_try_from() {
-        let utf8 = AmfUtf8::<2>::new("test").unwrap();
+        let utf8 = AmfUtf8::<2>::new_from_str("test").unwrap();
         let valued: AmfUtf8ValuedType<2, 0x02> = utf8.clone().try_into().unwrap();
         assert_eq!(valued.inner, utf8);
     }
 
     #[test]
     fn test_as_ref() {
-        let utf8 = AmfUtf8::<2>::new("test").unwrap();
+        let utf8 = AmfUtf8::<2>::new_from_str("test").unwrap();
         let valued = AmfUtf8ValuedType::<2, 0x02>::new(utf8.clone());
         assert_eq!(valued.as_ref(), &utf8);
     }
 
     #[test]
     fn test_deref() {
-        let utf8 = AmfUtf8::<2>::new("test").unwrap();
+        let utf8 = AmfUtf8::<2>::new_from_str("test").unwrap();
         let valued = AmfUtf8ValuedType::<2, 0x02>::new(utf8.clone());
         assert_eq!(&*valued, &utf8);
     }
 
     #[test]
     fn test_display() {
-        let valued = AmfUtf8ValuedType::<2, 0x02>::new(AmfUtf8::<2>::new("test").unwrap());
+        let valued = AmfUtf8ValuedType::<2, 0x02>::new(AmfUtf8::<2>::new_from_str("test").unwrap());
         assert_eq!(format!("{}", valued), "test");
     }
 
     // 测试 StringType 具体实现
     #[test]
     fn test_string_type_marshall() {
-        let s = StringType::new(AmfUtf8::<2>::new("hello").unwrap());
+        let s = StringType::new(AmfUtf8::<2>::new_from_str("hello").unwrap());
         let data = s.marshall().unwrap();
         assert_eq!(data[0], TypeMarker::String as u8);
         assert_eq!(&data[1..], [0x00, 0x05, b'h', b'e', b'l', b'l', b'o']);
@@ -184,7 +198,7 @@ mod tests {
 
     #[test]
     fn test_string_type_marshall_length() {
-        let s = StringType::new(AmfUtf8::<2>::new("hello").unwrap());
+        let s = StringType::new(AmfUtf8::<2>::new_from_str("hello").unwrap());
         assert_eq!(s.marshall_length(), 8); // 1 marker + 2 length + 5 chars
     }
 
@@ -243,7 +257,7 @@ mod tests {
     // 测试 LongStringType 具体实现
     #[test]
     fn test_long_string_type_marshall() {
-        let s = LongStringType::new(AmfUtf8::<4>::new("hello").unwrap());
+        let s = LongStringType::new(AmfUtf8::<4>::new_from_str("hello").unwrap());
         let data = s.marshall().unwrap();
         assert_eq!(data[0], TypeMarker::LongString as u8);
         assert_eq!(
@@ -254,7 +268,7 @@ mod tests {
 
     #[test]
     fn test_long_string_type_marshall_length() {
-        let s = LongStringType::new(AmfUtf8::<4>::new("hello").unwrap());
+        let s = LongStringType::new(AmfUtf8::<4>::new_from_str("hello").unwrap());
         assert_eq!(s.marshall_length(), 10); // 1 marker + 4 length + 5 chars
     }
 
@@ -330,13 +344,19 @@ mod tests {
     // 测试类型别名
     #[test]
     fn test_string_type_alias() {
-        let s: StringType = AmfUtf8::<2>::new("test").unwrap().try_into().unwrap();
+        let s: StringType = AmfUtf8::<2>::new_from_str("test")
+            .unwrap()
+            .try_into()
+            .unwrap();
         assert_eq!(s.as_ref().as_ref(), "test");
     }
 
     #[test]
     fn test_long_string_type_alias() {
-        let s: LongStringType = AmfUtf8::<4>::new("test").unwrap().try_into().unwrap();
+        let s: LongStringType = AmfUtf8::<4>::new_from_str("test")
+            .unwrap()
+            .try_into()
+            .unwrap();
         assert_eq!(s.as_ref().as_ref(), "test");
     }
 
@@ -350,7 +370,7 @@ mod tests {
     #[test]
     fn string_type_clone_and_eq() {
         // create an original value
-        let inner = AmfUtf8::<2>::new("hello").unwrap();
+        let inner = AmfUtf8::<2>::new_from_str("hello").unwrap();
         let orig: StringType = StringType::new(inner);
 
         // Clone should produce an equal value
@@ -365,8 +385,8 @@ mod tests {
 
     #[test]
     fn string_type_hash_differs_on_content_change() {
-        let a = StringType::new(AmfUtf8::<2>::new("foo").unwrap());
-        let b = StringType::new(AmfUtf8::<2>::new("bar").unwrap());
+        let a = StringType::new(AmfUtf8::<2>::new_from_str("foo").unwrap());
+        let b = StringType::new(AmfUtf8::<2>::new_from_str("bar").unwrap());
         // different strings must produce different hashes (very likely)
         assert_ne!(
             hash_of(&a),
@@ -377,7 +397,7 @@ mod tests {
 
     #[test]
     fn long_string_type_clone_and_eq() {
-        let inner = AmfUtf8::<4>::new("a very long string").unwrap();
+        let inner = AmfUtf8::<4>::new_from_str("a very long string").unwrap();
         let orig: LongStringType = LongStringType::new(inner);
 
         // Clone ↔ Eq
@@ -390,8 +410,8 @@ mod tests {
 
     #[test]
     fn long_string_type_hash_differs_on_content_change() {
-        let a = LongStringType::new(AmfUtf8::<4>::new("one").unwrap());
-        let b = LongStringType::new(AmfUtf8::<4>::new("two").unwrap());
+        let a = LongStringType::new(AmfUtf8::<4>::new_from_str("one").unwrap());
+        let b = LongStringType::new(AmfUtf8::<4>::new_from_str("two").unwrap());
         assert_ne!(hash_of(&a), hash_of(&b));
     }
     #[test]

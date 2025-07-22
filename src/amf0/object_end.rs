@@ -59,6 +59,8 @@ impl Unmarshall for ObjectEndType {
     }
 }
 
+// 实现 rust 惯用语("idiom") 方便用户使用
+
 impl TryFrom<&[u8]> for ObjectEndType {
     type Error = AmfError;
 
