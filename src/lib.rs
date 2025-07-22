@@ -1,3 +1,3 @@
 pub mod amf0;
+pub mod errors;
 pub mod traits;
-pub mod utf8;
