@@ -70,9 +70,31 @@ impl TryFrom<&[u8]> for BooleanType {
     }
 }
 
+impl TryFrom<Vec<u8>> for BooleanType {
+    type Error = AmfError;
+
+    fn try_from(vec: Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(vec.as_slice())
+    }
+}
+
+impl TryFrom<BooleanType> for Vec<u8> {
+    type Error = AmfError;
+
+    fn try_from(value: BooleanType) -> Result<Self, Self::Error> {
+        value.marshall()
+    }
+}
+
 impl From<bool> for BooleanType {
     fn from(value: bool) -> Self {
         Self::new(value)
+    }
+}
+
+impl From<BooleanType> for bool {
+    fn from(value: BooleanType) -> Self {
+        value.value
     }
 }
 

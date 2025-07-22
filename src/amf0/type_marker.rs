@@ -56,6 +56,14 @@ impl TryFrom<u8> for TypeMarker {
     }
 }
 
+impl TryFrom<TypeMarker> for u8 {
+    type Error = AmfError;
+
+    fn try_from(value: TypeMarker) -> Result<Self, Self::Error> {
+        Ok(value as u8)
+    }
+}
+
 impl Display for TypeMarker {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)

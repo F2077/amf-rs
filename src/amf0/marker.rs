@@ -60,6 +60,22 @@ impl TryFrom<&[u8]> for NullType {
     }
 }
 
+impl TryFrom<Vec<u8>> for NullType {
+    type Error = AmfError;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_slice())
+    }
+}
+
+impl TryFrom<NullType> for Vec<u8> {
+    type Error = AmfError;
+
+    fn try_from(value: NullType) -> Result<Self, Self::Error> {
+        value.marshall()
+    }
+}
+
 impl Display for NullType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "null")
@@ -88,6 +104,22 @@ impl TryFrom<&[u8]> for UndefinedType {
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         Self::unmarshall(value).map(|(o, _)| o)
+    }
+}
+
+impl TryFrom<Vec<u8>> for UndefinedType {
+    type Error = AmfError;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_slice())
+    }
+}
+
+impl TryFrom<UndefinedType> for Vec<u8> {
+    type Error = AmfError;
+
+    fn try_from(value: UndefinedType) -> Result<Self, Self::Error> {
+        value.marshall()
     }
 }
 

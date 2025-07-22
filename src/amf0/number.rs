@@ -67,9 +67,31 @@ impl TryFrom<&[u8]> for NumberType {
     }
 }
 
+impl TryFrom<Vec<u8>> for NumberType {
+    type Error = AmfError;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_slice())
+    }
+}
+
+impl TryFrom<NumberType> for Vec<u8> {
+    type Error = AmfError;
+
+    fn try_from(value: NumberType) -> Result<Self, Self::Error> {
+        value.marshall()
+    }
+}
+
 impl From<f64> for NumberType {
     fn from(value: f64) -> Self {
         Self::new(value)
+    }
+}
+
+impl From<NumberType> for f64 {
+    fn from(value: NumberType) -> Self {
+        value.value
     }
 }
 

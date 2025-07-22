@@ -156,6 +156,22 @@ impl TryFrom<&[u8]> for Amf0TypedValue {
     }
 }
 
+impl TryFrom<Vec<u8>> for Amf0TypedValue {
+    type Error = AmfError;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_slice())
+    }
+}
+
+impl TryFrom<Amf0TypedValue> for Vec<u8> {
+    type Error = AmfError;
+
+    fn try_from(value: Amf0TypedValue) -> Result<Self, Self::Error> {
+        value.marshall()
+    }
+}
+
 impl Display for Amf0TypedValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -324,6 +340,22 @@ impl<const LBW: usize, const TM: u8> TryFrom<&[u8]> for NestedType<LBW, TM> {
 
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         Self::unmarshall(value).map(|(v, _)| v)
+    }
+}
+
+impl<const LBW: usize, const TM: u8> TryFrom<Vec<u8>> for NestedType<LBW, TM> {
+    type Error = AmfError;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_slice())
+    }
+}
+
+impl<const LBW: usize, const TM: u8> TryFrom<NestedType<LBW, TM>> for Vec<u8> {
+    type Error = AmfError;
+
+    fn try_from(value: NestedType<LBW, TM>) -> Result<Self, Self::Error> {
+        value.marshall()
     }
 }
 

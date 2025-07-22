@@ -101,11 +101,35 @@ impl<const LBW: usize> TryFrom<&[u8]> for AmfUtf8<LBW> {
     }
 }
 
+impl<const LBW: usize> TryFrom<Vec<u8>> for AmfUtf8<LBW> {
+    type Error = AmfError;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_slice())
+    }
+}
+
+impl<const LBW: usize> TryFrom<AmfUtf8<LBW>> for Vec<u8> {
+    type Error = AmfError;
+
+    fn try_from(value: AmfUtf8<LBW>) -> Result<Self, Self::Error> {
+        value.marshall()
+    }
+}
+
 impl<const LBW: usize> TryFrom<String> for AmfUtf8<LBW> {
     type Error = AmfError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         Self::new(value)
+    }
+}
+
+impl<const LBW: usize> TryFrom<AmfUtf8<LBW>> for String {
+    type Error = AmfError;
+
+    fn try_from(value: AmfUtf8<LBW>) -> Result<Self, Self::Error> {
+        Ok(value.inner)
     }
 }
 

@@ -73,11 +73,35 @@ impl<const LBW: usize, const TM: u8> TryFrom<&[u8]> for AmfUtf8ValuedType<LBW, T
     }
 }
 
+impl<const LBW: usize, const TM: u8> TryFrom<Vec<u8>> for AmfUtf8ValuedType<LBW, TM> {
+    type Error = AmfError;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_slice())
+    }
+}
+
+impl<const LBW: usize, const TM: u8> TryFrom<AmfUtf8ValuedType<LBW, TM>> for Vec<u8> {
+    type Error = AmfError;
+
+    fn try_from(value: AmfUtf8ValuedType<LBW, TM>) -> Result<Self, Self::Error> {
+        value.marshall()
+    }
+}
+
 impl<const LBW: usize, const TM: u8> TryFrom<String> for AmfUtf8ValuedType<LBW, TM> {
     type Error = AmfError;
 
     fn try_from(value: String) -> Result<Self, Self::Error> {
         Self::new_from_string(value)
+    }
+}
+
+impl<const LBW: usize, const TM: u8> TryFrom<AmfUtf8ValuedType<LBW, TM>> for String {
+    type Error = AmfError;
+
+    fn try_from(value: AmfUtf8ValuedType<LBW, TM>) -> Result<Self, Self::Error> {
+        value.inner.try_into()
     }
 }
 

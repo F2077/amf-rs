@@ -69,6 +69,22 @@ impl TryFrom<&[u8]> for ObjectEndType {
     }
 }
 
+impl TryFrom<Vec<u8>> for ObjectEndType {
+    type Error = AmfError;
+
+    fn try_from(value: Vec<u8>) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_slice())
+    }
+}
+
+impl TryFrom<ObjectEndType> for Vec<u8> {
+    type Error = AmfError;
+
+    fn try_from(value: ObjectEndType) -> Result<Self, Self::Error> {
+        value.marshall()
+    }
+}
+
 impl Display for ObjectEndType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.empty)
