@@ -52,7 +52,7 @@ impl<const LBW: usize> MarshallLength for AmfUtf8<LBW> {
 impl<const LBW: usize> Unmarshall for AmfUtf8<LBW> {
     fn unmarshall(buf: &[u8]) -> Result<(Self, usize), AmfError> {
         debug_assert!(LBW == 2 || LBW == 4);
-        let mut length = 0usize;
+        let length;
         if LBW == 2 {
             if buf.len() < 2 {
                 return Err(AmfError::BufferTooSmall {

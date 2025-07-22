@@ -21,7 +21,7 @@ impl MarshallLength for UnsupportedType {
 }
 
 impl Unmarshall for UnsupportedType {
-    fn unmarshall(buf: &[u8]) -> Result<(Self, usize), AmfError> {
+    fn unmarshall(_buf: &[u8]) -> Result<(Self, usize), AmfError> {
         panic!("unsupported")
     }
 }
