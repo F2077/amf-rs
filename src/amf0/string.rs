@@ -208,7 +208,7 @@ mod tests {
     #[test]
     fn test_display() {
         let valued = AmfUtf8ValuedType::<2, 0x02>::new(AmfUtf8::<2>::new_from_str("test").unwrap());
-        assert_eq!(format!("{}", valued), "test");
+        assert_eq!(format!("{}", valued), "\"test\"");
     }
 
     // 测试 StringType 具体实现

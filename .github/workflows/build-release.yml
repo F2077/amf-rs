@@ -2,7 +2,7 @@ name: Build Release
 
 on:
   workflow_dispatch:    # 手动触发发布流程
-
+#  可选
 #  push:
 #    branches: [ "main" ]  # 主分支推送时触发构建（可选）
 #  pull_request:
@@ -16,11 +16,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # 安装 ffmpeg7 和 flvmeta
+      - name: Install static FFmpeg7 and flvmeta
+        run: |
+          sudo apt-get update
+          # 安装 ffmpeg7（静态编译版本）
+          sudo apt-get install -y ffmpeg
+          # 安装 flvmeta
+          sudo apt-get install -y flvmeta
+
+      # 将安装的二进制添加到 PATH
+      - name: Add FFmpeg and flvmeta to PATH
+        run: |
+          echo "/usr/bin" >> $GITHUB_PATH
+
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           override: true
+
       - name: Build and Test
         run: |
           cargo build --release    # 验证构建
