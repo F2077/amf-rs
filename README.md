@@ -174,6 +174,35 @@ cargo test
 
 ---
 
+## Benchmark Results
+
+### String Types
+
+| Type       | Operation  | Iterations |  Min Time |  Avg Time |  Max Time | Outliers                     |
+|------------|------------|-----------:|----------:|----------:|----------:|------------------------------|
+| StringType | marshall   |          5 | 24.224 ns | 24.311 ns | 24.398 ns | 2 low mild (2%)              |
+| StringType | unmarshall |          5 | 13.751 ns | 13.783 ns | 13.815 ns | 1 low mild, 6 high mild (7%) |
+
+### LongStringType
+
+| Type           | Operation  |  Length |  Min Time |  Avg Time |  Max Time | Outliers                                     |
+|----------------|------------|--------:|----------:|----------:|----------:|----------------------------------------------|
+| LongStringType | marshall   | 131,070 | 5.0005 µs | 5.7249 µs | 6.5218 µs | none                                         |
+| LongStringType | unmarshall | 131,070 | 4.0217 µs | 4.0252 µs | 4.0285 µs | 1 low severe, 5 low mild, 1 high severe (7%) |
+
+### Nested Types
+
+| Type          | Operation  | Elements |  Min Time |  Avg Time |  Max Time | Outliers                                    |
+|---------------|------------|---------:|----------:|----------:|----------:|---------------------------------------------|
+| ObjectType    | marshall   |      100 | 2.7895 µs | 2.7924 µs | 2.7953 µs | 2 low mild, 2 high mild, 1 high severe (5%) |
+| ObjectType    | unmarshall |      100 | 4.9614 µs | 4.9701 µs | 4.9791 µs | 4 low mild/high mild (4%)                   |
+| EcmaArrayType | marshall   |      100 | 2.7707 µs | 2.7753 µs | 2.7800 µs | 2 low mild, 2 high mild (4%)                |
+| EcmaArrayType | unmarshall |      100 | 4.9890 µs | 4.9991 µs | 5.0097 µs | 1 low severe (1%)                           |
+
+All benchmarks were executed on the `target/release/deps/amf_benches` binary with 100 samples per test. Outliers are reported according to Criterion's default Tukey rule.
+
+---
+
 ## Reference
 
 [Action Message Format -- AMF 0](https://rtmp.veriskope.com/pdf/amf0-file-format-specification.pdf)
