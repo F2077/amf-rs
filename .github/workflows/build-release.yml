@@ -21,7 +21,7 @@ jobs:
       - name: Install static FFmpeg7 and flvmeta
         run: |
           sudo apt-get update
-          # 安装 ffmpeg7（静态编译版本）
+          # 安装 ffmpeg
           sudo apt-get install -y ffmpeg
           # 安装 flvmeta
           sudo apt-get install -y flvmeta
