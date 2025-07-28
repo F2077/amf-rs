@@ -104,7 +104,7 @@ mod test_setup {
 
         assert!(found, "ScriptData Tag not found");
 
-        // 使用 ffprobe + jq 提取 JSON
+        // 使用 flvmeta 提取 ScriptData 中数据
         let probe = Command::new("flvmeta")
             .args(&["-j", output_path.as_path().to_str().unwrap()])
             .output()?;
